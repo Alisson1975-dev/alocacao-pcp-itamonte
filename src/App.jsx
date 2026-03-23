@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, deleteDoc } from 'firebase/firestore';
 
-// Definição manual de ícones SVG
+// Ícones SVG para estabilidade total
 const Icons = {
   Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
   Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
@@ -36,7 +36,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appIdFixed = 'alocacao-mg1-pcp';
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -86,13 +85,14 @@ const App = () => {
   };
 
   const handleSequenciar = () => {
+    if (allocations.length === 0) return;
     let currentSeq = 1;
     const sequencedData = allocations.map((item, index, arr) => {
       if (index > 0 && String(item.item).trim().toUpperCase() !== String(arr[index - 1].item).trim().toUpperCase()) currentSeq++;
       return { ...item, sequencia: currentSeq };
     });
     setAllocations(sequencedData);
-    setCopyFeedback({ type: 'success', message: 'Sequenciado!' });
+    setCopyFeedback({ type: 'success', message: 'Sequenciamento concluído!' });
   };
 
   const handleJuncao = () => {
@@ -123,19 +123,46 @@ const App = () => {
         const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
         const headers = data[0].map(h => String(h).toUpperCase().trim());
         const rows = data.slice(1);
-        const idx = { maq: headers.indexOf('MÁQUINA'), itm: headers.indexOf('ITEM'), itf: headers.indexOf('ITEM FINAL'), dsc: headers.indexOf('DESCRIÇÃO'), qtd: headers.indexOf('QUANTIDADE'), op: headers.indexOf('OP') };
+        const idx = { 
+            maq: headers.indexOf('MÁQUINA'), 
+            itm: headers.indexOf('ITEM'), 
+            itf: headers.indexOf('ITEM FINAL'), 
+            dsc: headers.indexOf('DESCRIÇÃO'), 
+            qtd: headers.indexOf('QUANTIDADE'), 
+            op: headers.indexOf('OP') 
+        };
         
         const newItems = rows.filter(r => r[idx.maq]).map((r, i) => ({
-          id: Date.now() + i, maquina: String(r[idx.maq] || ''), item: String(r[idx.itm] || ''), itemFinal: String(r[idx.itf] || ''),
-          descricao: String(r[idx.dsc] || ''), quantidade: parseFloat(String(r[idx.qtd] || '0').replace(',', '.')) || 0,
-          ordemProducao: String(r[idx.op] || ''), sequencia: '', perdaCount: 0, status: 'Pendente'
+          id: Date.now() + i, 
+          maquina: String(r[idx.maq] || ''), 
+          item: String(r[idx.itm] || ''), 
+          itemFinal: String(r[idx.itf] || ''),
+          descricao: String(r[idx.dsc] || ''), 
+          quantidade: parseFloat(String(r[idx.qtd] || '0').replace('.', '').replace(',', '.')) || 0,
+          ordemProducao: String(r[idx.op] || ''), 
+          sequencia: '', 
+          perdaCount: 0, 
+          status: 'Pendente'
         }));
         setAllocations(prev => [...prev, ...newItems]);
-        setCopyFeedback({ type: 'success', message: 'Importado!' });
+        setCopyFeedback({ type: 'success', message: 'Importação concluída!' });
       } catch (err) { setCopyFeedback({ type: 'error', message: 'Erro no arquivo' }); }
       finally { setIsImporting(false); e.target.value = null; }
     };
     reader.readAsBinaryString(file);
+  };
+
+  const handleCopyData = () => {
+    const conferidos = allocations.filter(item => item.status === 'Conferido');
+    if (conferidos.length === 0) return setCopyFeedback({ type: 'error', message: 'Nada conferido.' });
+    const rows = conferidos.map(item => `${item.maquina}\t${item.item}\t${item.itemFinal || ''}\t${item.descricao}\t${formatQty(item.quantidade)}\t${item.ordemProducao}`).join('\n');
+    const el = document.createElement("textarea"); el.value = rows; document.body.appendChild(el); el.select();
+    document.execCommand('copy'); document.body.removeChild(el);
+    setCopyFeedback({ type: 'success', message: 'Dados copiados!' });
+  };
+
+  const toggleStatus = (id) => {
+    setAllocations(prev => prev.map(item => item.id === id ? { ...item, status: item.status === 'Pendente' ? 'Conferido' : 'Pendente' } : item));
   };
 
   const handleOpenModal = (item = null, qtyOnly = false) => {
@@ -154,52 +181,65 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20">
-      {copyFeedback && <div className="fixed top-4 right-4 z-[100] px-6 py-3 rounded-2xl shadow-2xl bg-slate-900 text-white border border-slate-700 animate-in slide-in-from-right">{copyFeedback.message}</div>}
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans pb-20">
+      {copyFeedback && <div className="fixed top-4 right-4 z-[100] px-6 py-3 rounded-2xl shadow-2xl bg-slate-900 text-white animate-in slide-in-from-right">{copyFeedback.message}</div>}
       <input type="file" ref={fileInputRef} onChange={handleImportExcel} accept=".xlsx, .xls" className="hidden" />
 
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 p-4">
-        <div className="max-w-[1600px] mx-auto flex justify-between items-center">
-          <h1 className="text-xl font-black tracking-tight text-slate-800 uppercase">Alocação MG1 - PCP</h1>
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 p-4 shadow-sm">
+        <div className="max-w-[1600px] mx-auto flex justify-between items-center px-4">
+          <h1 className="text-xl font-black tracking-tight text-[#1e293b] uppercase">Alocação MG1 - PCP</h1>
           <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-400 hover:text-blue-600 transition-all"><Icons.Settings /></button>
         </div>
       </header>
 
       <main className="max-w-[1600px] mx-auto p-6 space-y-6">
-        <section className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+        <section className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
           <div className="relative flex-1 min-w-[300px]">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><Icons.Search /></span>
-            <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 ring-blue-500/10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-3 bg-[#f1f5f9] border border-slate-200 rounded-2xl outline-none focus:ring-2 ring-blue-500/10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => fileInputRef.current.click()} className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg hover:bg-black transition-all"><Icons.Import /> Incluir</button>
-            <button onClick={handleSequenciar} className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg hover:bg-black transition-all"><Icons.ListOrdered /> Sequenciar</button>
-            <button onClick={handleJuncao} className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg hover:bg-black transition-all"><Icons.Layers /> Junção</button>
-            <button onClick={() => handleOpenModal()} className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg hover:bg-blue-700 transition-all"><Icons.Plus /> Nova</button>
+            <button onClick={() => fileInputRef.current.click()} className="px-5 py-3 bg-[#0f172a] text-white rounded-2xl font-black text-[10px] uppercase shadow-md hover:bg-black transition-all flex items-center gap-2"><Icons.Import /> Incluir</button>
+            <button onClick={handleSequenciar} className="px-5 py-3 bg-[#0f172a] text-white rounded-2xl font-black text-[10px] uppercase shadow-md hover:bg-black transition-all flex items-center gap-2"><Icons.ListOrdered /> Sequenciar</button>
+            <button onClick={handleJuncao} className="px-5 py-3 bg-[#0f172a] text-white rounded-2xl font-black text-[10px] uppercase shadow-md hover:bg-black transition-all flex items-center gap-2"><Icons.Layers /> Junção</button>
+            <button onClick={handleCopyData} className="px-5 py-3 bg-[#0f172a] text-white rounded-2xl font-black text-[10px] uppercase shadow-md hover:bg-black transition-all flex items-center gap-2"><Icons.Copy /> Copiar Dados</button>
+            <button onClick={() => handleOpenModal()} className="px-6 py-3 bg-[#2563eb] text-white rounded-2xl font-black text-[10px] uppercase shadow-lg hover:bg-[#1d4ed8] transition-all flex items-center gap-2"><Icons.Plus /> Nova Alocação</button>
           </div>
         </section>
 
-        <section className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto min-h-[300px]">
+        <section className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest">
-                <tr>
-                  <th className="px-6 py-4 w-20 text-center">Seq.</th>
-                  <th className="px-6 py-4">Máquina</th>
-                  <th className="px-6 py-4">Item</th>
-                  <th className="px-6 py-4 text-center">Quantidade</th>
-                  <th className="px-6 py-4 bg-yellow-400 text-slate-800">OP</th>
-                  <th className="px-6 py-4 bg-slate-800 text-right">Ações</th>
+              <thead>
+                <tr className="text-white font-black text-[10px] uppercase tracking-widest divide-x divide-white/10">
+                  <th className="px-6 py-5 bg-[#2563eb] text-center w-20">Seq.</th>
+                  <th className="px-6 py-5 bg-[#2563eb]">Máquina</th>
+                  <th className="px-6 py-5 bg-[#2563eb]">Item</th>
+                  <th className="px-6 py-5 bg-[#2563eb]">Item Final</th>
+                  <th className="px-6 py-5 bg-[#2563eb] text-center">Quantidade</th>
+                  <th className="px-6 py-5 bg-[#facc15] text-[#1e293b]">OP</th>
+                  <th className="px-6 py-5 bg-[#facc15] text-[#1e293b]">Perda</th>
+                  <th className="px-6 py-5 bg-[#facc15] text-[#1e293b] text-center">Status</th>
+                  <th className="px-6 py-5 bg-[#1e293b] text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {allocations.filter(a => a.maquina.toLowerCase().includes(searchTerm.toLowerCase()) || a.item.toLowerCase().includes(searchTerm.toLowerCase())).map(item => (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
                     <td className="px-6 py-4 text-center font-black text-blue-600">{item.sequencia}</td>
                     <td className="px-6 py-4 font-bold text-slate-700">{item.maquina}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{item.item}</td>
+                    <td className="px-6 py-4 text-sm text-slate-500 font-medium">{item.item}</td>
+                    <td className="px-6 py-4 text-sm text-slate-400 font-mono">{item.itemFinal || '-'}</td>
                     <td className="px-6 py-4 text-center font-black text-slate-800 tabular-nums">{formatQty(item.quantidade)}</td>
                     <td className="px-6 py-4 font-bold text-slate-600">{item.ordemProducao}</td>
+                    <td className="px-6 py-4 text-center">
+                       <span className="text-xs font-bold text-slate-400">{item.perdaCount || 0}</span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                       <button onClick={() => toggleStatus(item.id)} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${item.status === 'Conferido' ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-white border-slate-200 text-slate-400'}`}>
+                         {item.status}
+                       </button>
+                    </td>
                     <td className="px-6 py-4 text-right">
                       <button onClick={() => setAllocations(prev => prev.filter(i => i.id !== item.id))} className="text-slate-300 hover:text-red-500 transition-colors p-2"><Icons.Trash /></button>
                     </td>
@@ -208,31 +248,34 @@ const App = () => {
               </tbody>
             </table>
           </div>
+          <div className="p-4 bg-slate-50 border-t border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Total: {allocations.length} / {MAX_ROWS}
+          </div>
         </section>
       </main>
 
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in zoom-in">
-          <div className="bg-white rounded-[32px] p-8 w-full max-w-sm">
-            <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black text-slate-800 uppercase">Ajustes</h2><button onClick={() => setIsSettingsOpen(false)}><Icons.X /></button></div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Valor de Perda (kg)</label>
+          <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm">
+            <h2 className="text-xl font-black text-slate-800 uppercase mb-6">Ajustes</h2>
+            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Perda Padrão (kg)</label>
             <input type="number" className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-2xl font-black mb-6" value={lossValue} onChange={e => setLossValue(e.target.value)} />
-            <button onClick={async () => { await setDoc(doc(db, 'settings', 'config_alocacao'), { lossValue: parseFloat(lossValue) }); setIsSettingsOpen(false); }} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-blue-100">Salvar</button>
+            <button onClick={async () => { await setDoc(doc(db, 'settings', 'config_alocacao'), { lossValue: parseFloat(lossValue) }); setIsSettingsOpen(false); }} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg">Salvar</button>
           </div>
         </div>
       )}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-[32px] p-8 w-full max-w-lg">
-            <h2 className="text-xl font-black text-slate-800 uppercase mb-6">{editingId ? 'Editar' : 'Nova'} Alocação</h2>
+          <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-lg">
+            <h2 className="text-xl font-black text-[#1e293b] uppercase mb-6">Nova Alocação</h2>
             <form onSubmit={handleSave} className="grid grid-cols-2 gap-4">
-               <input placeholder="Máquina" className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={formData.maquina} onChange={e => setFormData({...formData, maquina: e.target.value})} />
-               <input placeholder="Item" className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={formData.item} onChange={e => setFormData({...formData, item: e.target.value})} />
-               <input placeholder="OP" className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={formData.ordemProducao} onChange={e => setFormData({...formData, ordemProducao: e.target.value})} />
-               <input placeholder="Quantidade" type="number" step="0.01" className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={formData.quantidade} onChange={e => setFormData({...formData, quantidade: e.target.value})} />
-               <button type="submit" className="col-span-2 py-4 bg-slate-900 text-white rounded-xl font-black uppercase text-xs tracking-widest">Salvar</button>
-               <button type="button" onClick={() => setIsModalOpen(false)} className="col-span-2 py-2 text-slate-400 font-bold uppercase text-[10px]">Cancelar</button>
+               <div className="col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase ml-2">Máquina</label><input required className="w-full px-4 py-3 bg-[#f1f5f9] border border-slate-200 rounded-xl" value={formData.maquina} onChange={e => setFormData({...formData, maquina: e.target.value})} /></div>
+               <div className="col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase ml-2">Item</label><input required className="w-full px-4 py-3 bg-[#f1f5f9] border border-slate-200 rounded-xl" value={formData.item} onChange={e => setFormData({...formData, item: e.target.value})} /></div>
+               <div><label className="text-[10px] font-black text-slate-400 uppercase ml-2">OP</label><input required className="w-full px-4 py-3 bg-[#f1f5f9] border border-slate-200 rounded-xl" value={formData.ordemProducao} onChange={e => setFormData({...formData, ordemProducao: e.target.value})} /></div>
+               <div><label className="text-[10px] font-black text-slate-400 uppercase ml-2">Quantidade</label><input required type="number" step="0.01" className="w-full px-4 py-3 bg-[#f1f5f9] border border-slate-200 rounded-xl font-bold" value={formData.quantidade} onChange={e => setFormData({...formData, quantidade: e.target.value})} /></div>
+               <button type="submit" className="col-span-2 mt-4 py-4 bg-[#0f172a] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Salvar Alocação</button>
+               <button type="button" onClick={() => setIsModalOpen(false)} className="col-span-2 py-2 text-slate-400 font-black text-[10px] uppercase">Cancelar</button>
             </form>
           </div>
         </div>

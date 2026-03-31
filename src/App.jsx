@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, writeBatch } from 'firebase/firestore';
 
 // Definição manual de ícones SVG para garantir estabilidade e evitar erros de biblioteca
@@ -67,26 +67,25 @@ const App = () => {
   const discardedOpsCol = collection(db, 'artifacts', appId, 'public', 'data', 'discardedOps');
   const settingsDoc = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'settings');
 
-  // Autenticação Inicial
+  // Autenticação e Listeners
   useEffect(() => {
     signInAnonymously(auth).catch(console.error);
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
 
-  // Listeners do Banco de Dados
   useEffect(() => {
     if (!user) return;
 
     const unsubAlloc = onSnapshot(allocationsCol, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAllocations(data.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)));
-    });
+    }, (err) => console.error("Erro Alocações:", err));
 
     const unsubDiscarded = onSnapshot(discardedOpsCol, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setDiscardedOps(data.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)));
-    });
+    }, (err) => console.error("Erro Descartadas:", err));
 
     const unsubSettings = onSnapshot(settingsDoc, (docSnap) => {
       if (docSnap.exists()) {
@@ -95,13 +94,24 @@ const App = () => {
       }
     });
 
-    return () => { unsubAlloc(); unsubDiscarded(); unsubSettings(); };
+    return () => {
+      unsubAlloc();
+      unsubDiscarded();
+      unsubSettings();
+    };
   }, [user]);
 
-  // Restante da sua lógica ORIGINAL intacta...
   const copyToClipboard = (text, msg) => {
-    const el = document.createElement("textarea"); el.value = text; document.body.appendChild(el); el.select();
-    try { document.execCommand('copy'); setCopyFeedback({ type: 'success', message: msg }); } catch (err) {}
+    const el = document.createElement("textarea");
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    try {
+      document.execCommand('copy');
+      setCopyFeedback({ type: 'success', message: msg });
+    } catch (err) {
+      setCopyFeedback({ type: 'error', message: 'Erro ao copiar.' });
+    }
     document.body.removeChild(el);
   };
 
@@ -117,7 +127,9 @@ const App = () => {
       await setDoc(settingsDoc, { lossValue: parseFloat(newValue) }, { merge: true });
       setIsSettingsOpen(false);
       setCopyFeedback({ type: 'success', message: 'Configuração salva!' });
-    } catch (err) { setCopyFeedback({ type: 'error', message: 'Erro ao salvar.' }); }
+    } catch (err) {
+      setCopyFeedback({ type: 'error', message: 'Erro ao salvar.' });
+    }
   };
 
   const formatQty = (val) => {
@@ -145,6 +157,7 @@ const App = () => {
     const batch = writeBatch(db);
     let currentSeq = 1;
     const sorted = [...allocations].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    
     sorted.forEach((item, index, arr) => {
       if (index > 0) {
         const itemAtual = String(item.item || '').trim().toUpperCase();
@@ -161,17 +174,30 @@ const App = () => {
     if (allocations.length === 0 || !user) return;
     const grouped = {};
     const discarded = [];
+    
     allocations.forEach((item) => {
       const seq = item.sequencia || 'sem-seq';
       const cleanItemFinal = String(item.itemFinal || '').trim();
+      
       if (!grouped[seq]) {
-        grouped[seq] = { ...item, quantidade: parseFloat(item.quantidade) || 0, itensFinaisAgrupados: cleanItemFinal ? [cleanItemFinal] : [] };
+        grouped[seq] = { 
+          ...item, 
+          quantidade: parseFloat(item.quantidade) || 0,
+          itensFinaisAgrupados: cleanItemFinal ? [cleanItemFinal] : []
+        };
       } else {
         grouped[seq].quantidade += (parseFloat(item.quantidade) || 0);
-        if (cleanItemFinal && !grouped[seq].itensFinaisAgrupados.includes(cleanItemFinal)) grouped[seq].itensFinaisAgrupados.push(cleanItemFinal);
-        discarded.push({ maquina: item.maquina, ordemProducao: item.ordemProducao, createdAt: Date.now() + discarded.length });
+        if (cleanItemFinal && !grouped[seq].itensFinaisAgrupados.includes(cleanItemFinal)) {
+          grouped[seq].itensFinaisAgrupados.push(cleanItemFinal);
+        }
+        discarded.push({ 
+          maquina: item.maquina, 
+          ordemProducao: item.ordemProducao,
+          createdAt: Date.now() + discarded.length 
+        });
       }
     });
+
     const batch = writeBatch(db);
     allocations.forEach(item => batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'allocations', String(item.id))));
     Object.values(grouped).forEach(item => {
@@ -195,7 +221,8 @@ const App = () => {
   };
 
   const handleImportExcel = async (e) => {
-    const file = e.target.files[0]; if (!file || !user) return;
+    const file = e.target.files[0];
+    if (!file || !user) return;
     setIsImporting(true);
     const reader = new FileReader();
     reader.onload = async (evt) => {
@@ -205,13 +232,27 @@ const App = () => {
         const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
         const headers = data[0].map(h => String(h).toUpperCase().trim());
         const rows = data.slice(1);
-        const idx = { maquina: headers.indexOf('MÁQUINA'), item: headers.indexOf('ITEM'), itemFinal: headers.indexOf('ITEM FINAL'), descricao: headers.indexOf('DESCRIÇÃO'), quantidade: headers.indexOf('QUANTIDADE'), op: headers.indexOf('OP') };
+        const idx = {
+          maquina: headers.indexOf('MÁQUINA'),
+          item: headers.indexOf('ITEM'),
+          itemFinal: headers.indexOf('ITEM FINAL'),
+          descricao: headers.indexOf('DESCRIÇÃO'),
+          quantidade: headers.indexOf('QUANTIDADE'),
+          op: headers.indexOf('OP')
+        };
+
         const batch = writeBatch(db);
         rows.filter(row => row.length > 0 && row[idx.maquina]).forEach((row, index) => {
           let maq = String(row[idx.maquina] || '').trim();
           if (/^\d+$/.test(maq)) maq = `EXT${maq}`;
           const newRef = doc(allocationsCol);
-          batch.set(newRef, { sequencia: '', maquina: maq, item: row[idx.item] || '', itemFinal: row[idx.itemFinal] || '', descricao: row[idx.descricao] || '', quantidade: parseFloat(String(row[idx.quantidade]).replace('.', '').replace(',', '.')) || 0, ordemProducao: row[idx.op] || '', perdaCount: 0, status: 'Pendente', createdAt: Date.now() + index });
+          batch.set(newRef, {
+            sequencia: '', maquina: maq, item: row[idx.item] || '',
+            itemFinal: row[idx.itemFinal] || '', descricao: row[idx.descricao] || '',
+            quantidade: parseFloat(String(row[idx.quantidade]).replace('.', '').replace(',', '.')) || 0,
+            ordemProducao: row[idx.op] || '', perdaCount: 0, status: 'Pendente',
+            createdAt: Date.now() + index
+          });
         });
         await batch.commit();
       } catch (err) { setCopyFeedback({ type: 'error', message: 'Erro na importação.' }); }
@@ -221,8 +262,13 @@ const App = () => {
   };
 
   const handleSave = async (e) => {
-    e.preventDefault(); if (!user) return;
-    const dataToSave = { ...formData, quantidade: parseFloat(String(formData.quantidade).replace(',', '.')), createdAt: editingId ? (allocations.find(i => i.id === editingId)?.createdAt || Date.now()) : Date.now() };
+    e.preventDefault();
+    if (!user) return;
+    const dataToSave = { 
+      ...formData, 
+      quantidade: parseFloat(String(formData.quantidade).replace(',', '.')),
+      createdAt: editingId ? (allocations.find(i => i.id === editingId)?.createdAt || Date.now()) : Date.now()
+    };
     const docRef = editingId ? doc(allocationsCol, editingId) : doc(allocationsCol);
     await setDoc(docRef, dataToSave);
     setIsModalOpen(false);
@@ -235,14 +281,22 @@ const App = () => {
 
   const handleAddPerda = async (item) => {
     if (!user) return;
-    await setDoc(doc(allocationsCol, item.id), { perdaCount: (item.perdaCount || 0) + 1, quantidade: (parseFloat(item.quantidade) || 0) + parseFloat(lossValue) }, { merge: true });
+    const currentQty = parseFloat(item.quantidade) || 0;
+    const currentCount = item.perdaCount || 0;
+    await setDoc(doc(allocationsCol, item.id), {
+      perdaCount: currentCount + 1,
+      quantidade: currentQty + parseFloat(lossValue)
+    }, { merge: true });
   };
 
   const handleResetPerda = async (item) => {
     if (!user) return;
     const currentQty = parseFloat(item.quantidade) || 0;
     const currentCount = item.perdaCount || 0;
-    await setDoc(doc(allocationsCol, item.id), { perdaCount: 0, quantidade: currentQty - (currentCount * parseFloat(lossValue)) }, { merge: true });
+    await setDoc(doc(allocationsCol, item.id), {
+      perdaCount: 0,
+      quantidade: currentQty - (currentCount * parseFloat(lossValue))
+    }, { merge: true });
   };
 
   const filtered = allocations.filter(item => 
@@ -264,8 +318,10 @@ const App = () => {
 
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-[1600px] mx-auto px-6 py-4 flex justify-between items-center">
-          <h1 className="text-xl font-black tracking-tight text-slate-800 uppercase">Alocação MG1 - PCP</h1>
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Icons.Settings /></button>
+          <h1 className="text-xl font-black tracking-tight text-slate-800 uppercase text-center w-full sm:w-auto">Alocação MG1 - PCP</h1>
+          <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+            <Icons.Settings />
+          </button>
         </div>
       </header>
 
@@ -277,7 +333,7 @@ const App = () => {
               <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all text-sm font-medium" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-              <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(null); setFormData({ sequencia: '', maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente' }); setIsModalOpen(true); }} disabled={allocations.length >= MAX_ROWS} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-2xl font-black text-xs uppercase tracking-widest"><Icons.Plus /> Nova Alocação</button>
+              <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(null); setFormData({ sequencia: '', maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente' }); setIsModalOpen(true); }} disabled={allocations.length >= MAX_ROWS} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-2xl transition-all shadow-lg font-black text-xs uppercase tracking-widest"><Icons.Plus /> Nova Alocação</button>
               <button onClick={() => setIsClearModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-black text-xs uppercase hover:bg-red-600 hover:text-white transition-all shadow-md shadow-red-50"><Icons.Trash /> Limpar</button>
             </div>
           </div>
@@ -303,6 +359,7 @@ const App = () => {
                   <th className="px-6 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Máquina</th>
                   <th className="px-6 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Item</th>
                   <th className="px-6 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Item Final</th>
+                  <th className="px-6 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Descrição</th>
                   <th className="px-6 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500 text-center">Quantidade</th>
                   <th className="px-6 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500">OP</th>
                   <th className="px-6 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500 text-center">Perda</th>
@@ -314,6 +371,7 @@ const App = () => {
                 {filtered.map((item, index) => {
                   const nextItem = filtered[index + 1];
                   const isLastOfSequence = !nextItem || String(item.sequencia) !== String(nextItem?.sequencia);
+                  
                   return (
                     <React.Fragment key={item.id}>
                       <tr className="hover:bg-slate-50 transition-colors group">
@@ -321,6 +379,7 @@ const App = () => {
                         <td className="px-6 py-4 font-bold text-slate-700 whitespace-nowrap">{item.maquina}</td>
                         <td className="px-6 py-4 text-sm font-semibold text-slate-600">{item.item}</td>
                         <td className="px-6 py-4 font-mono text-sm text-slate-500">{item.itemFinal || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-slate-500 max-w-[200px] truncate" title={item.descricao}>{item.descricao || '-'}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2 group/qty">
                             <button onClick={() => { setIsQtyOnlyMode(true); setEditingId(item.id); setFormData(item); setIsModalOpen(true); }} className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover/qty:opacity-100"><Icons.Pencil /></button>
@@ -355,7 +414,7 @@ const App = () => {
                       {isLastOfSequence && (
                         <tr className="bg-slate-200/40 border-b border-slate-300">
                           <td className="px-4 py-3 text-center font-black text-slate-400 opacity-50 text-[10px]">{item.sequencia}</td>
-                          <td colSpan="8" className="px-6 py-2">
+                          <td colSpan="9" className="px-6 py-2">
                             <div className="flex items-center gap-3">
                               {item.itensFinaisAgrupados && item.itensFinaisAgrupados.length > 0 ? (
                                 <>
@@ -373,35 +432,56 @@ const App = () => {
               </tbody>
             </table>
           </div>
+          <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center text-[10px] font-black uppercase tracking-widest mt-auto">
+            <span className="text-slate-500">Total: <span className={allocations.length >= MAX_ROWS ? 'text-red-600' : 'text-blue-600'}>{allocations.length} / {MAX_ROWS}</span></span>
+            <span className="text-[9px] text-slate-300">Sincronizado na nuvem (PCP Colaborativo)</span>
+          </div>
         </section>
 
-        {discardedOps.length > 0 && (
-          <section className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden max-w-2xl">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Icons.ClipboardList /> OPS DESCARTADAS</h2>
-              <button onClick={handleCopyOP} className="flex items-center gap-2 px-5 py-2 bg-pink-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-pink-600 transition-all active:scale-95"><Icons.Copy /> Copiar OP</button>
-            </div>
-            <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
-               {discardedOps.map((op, idx) => <div key={idx} className="px-6 py-3 font-bold text-slate-700 text-xs flex justify-between"><span>{op.maquina}</span><span className="font-mono">{op.ordemProducao}</span></div>)}
-            </div>
-          </section>
-        )}
+        <section className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden max-w-2xl">
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Icons.ClipboardList /> OPS DESCARTADAS</h2>
+            <button onClick={handleCopyOP} className="flex items-center gap-2 px-5 py-2 bg-pink-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-pink-600 active:scale-95 transition-all"><Icons.Copy /> Copiar OP</button>
+          </div>
+          <div className="max-h-[300px] overflow-y-auto">
+            <table className="w-full text-left border-collapse">
+              <tbody className="divide-y divide-slate-100">
+                {discardedOps.map((item, idx) => (
+                  <tr key={item.id || idx} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-3 font-bold text-slate-700 text-xs">{item.maquina}</td>
+                    <td className="px-6 py-3 font-bold text-slate-500 font-mono text-xs">{item.ordemProducao}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </main>
 
-      {/* MODAL CONFIG */}
+      {/* Modais de Ajustes, Limpeza e Edição */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden p-8">
-            <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black text-slate-800 uppercase">Ajustes</h2><button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-slate-100 rounded-full"><Icons.X /></button></div>
+            <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Ajustes</h2><button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-slate-100 rounded-full"><Icons.X /></button></div>
             <div className="space-y-6">
-              <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Valor da Perda (kg)</label><div className="relative"><input type="number" className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-2xl font-black" value={lossValue} onChange={(e) => setLossValue(e.target.value)} /><span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-300">kg</span></div></div>
+              <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Valor da Perda (kg)</label><div className="relative"><input type="number" className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-2xl font-black" value={lossValue} onChange={(e) => setLossValue(e.target.value)} /><span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-300">kg</span></div></div>
               <button onClick={() => saveSettings(lossValue)} className="w-full py-4 bg-blue-600 text-white rounded-[20px] font-black text-xs uppercase tracking-widest shadow-xl">Salvar Alteração</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL CADASTRO */}
+      {isClearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8 text-center">
+            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Alert /></div>
+            <h2 className="text-xl font-black text-slate-800 uppercase mb-2">Limpar Tudo?</h2>
+            <p className="text-slate-500 text-sm font-medium mb-8">Apagar para TODOS os utilizadores? Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-3"><button onClick={() => setIsClearModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button><button onClick={handleClearAll} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Sim, Limpar</button></div>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-20">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">

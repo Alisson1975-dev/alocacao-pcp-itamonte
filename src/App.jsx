@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 // Definição manual de ícones SVG para garantir estabilidade e máxima velocidade
 const Icons = {
@@ -14,6 +15,7 @@ const Icons = {
   Import: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>,
   Layers: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>,
   Copy: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>,
+  Save: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>,
   Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
   X: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
   Pencil: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>,
@@ -35,12 +37,15 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = 'alocacao-mg1-pcp';
 
 const App = () => {
-  // Estados Locais (Sem dependência constante do banco para velocidade máxima)
+  const [user, setUser] = useState(null);
   const [allocations, setAllocations] = useState([]);
   const [discardedOps, setDiscardedOps] = useState([]);
   const [lossValue, setLossValue] = useState(200);
+  const [isSaving, setIsSaving] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,14 +65,50 @@ const App = () => {
     quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente'
   });
 
-  // Autenticação básica e carregamento de biblioteca
+  const stateDocRef = doc(db, 'settings', 'snapshot_alocacao');
+
   useEffect(() => {
-    signInAnonymously(auth).catch(console.error);
-    const script = document.createElement('script');
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-    script.async = true;
-    document.body.appendChild(script);
+    const initAuth = async () => {
+      signInAnonymously(auth).catch(console.error);
+      onAuthStateChanged(auth, async (u) => {
+        setUser(u);
+        if (u) {
+          const docSnap = await getDoc(stateDocRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.allocations) setAllocations(data.allocations);
+            if (data.discardedOps) setDiscardedOps(data.discardedOps);
+            if (data.lossValue) setLossValue(data.lossValue);
+          }
+        }
+      });
+    };
+    initAuth();
+    if (!window.XLSX) {
+      const script = document.createElement('script');
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
   }, []);
+
+  const handleSaveToCloud = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      await setDoc(stateDocRef, {
+        allocations,
+        discardedOps,
+        lossValue,
+        updatedAt: Date.now()
+      });
+      setCopyFeedback({ type: 'success', message: 'Tudo guardado na nuvem!' });
+    } catch (err) {
+      setCopyFeedback({ type: 'error', message: 'Erro ao guardar dados.' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (copyFeedback) {
@@ -76,32 +117,50 @@ const App = () => {
     }
   }, [copyFeedback]);
 
-  const filtered = useMemo(() => {
-    const term = searchTerm.toLowerCase();
-    return allocations.filter(item => 
-      String(item.maquina || '').toLowerCase().includes(term) || 
-      String(item.item || '').toLowerCase().includes(term) || 
-      String(item.ordemProducao || '').toLowerCase().includes(term)
-    );
-  }, [allocations, searchTerm]);
+  const formatQty = useCallback((val) => {
+    const num = parseFloat(val);
+    if (isNaN(num)) return "0,00";
+    return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+  }, []);
 
   const copyToClipboard = useCallback((text, msg) => {
-    const el = document.createElement("textarea"); el.value = text; document.body.appendChild(el); el.select();
-    try { document.execCommand('copy'); setCopyFeedback({ type: 'success', message: msg }); } catch (err) {}
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.style.position = 'fixed';
+    el.style.left = '-9999px';
+    el.style.top = '0';
+    document.body.appendChild(el);
+    el.focus();
+    el.select();
+    try {
+      if (document.execCommand('copy')) setCopyFeedback({ type: 'success', message: msg });
+    } catch (err) {
+      setCopyFeedback({ type: 'error', message: 'Erro ao copiar.' });
+    }
     document.body.removeChild(el);
   }, []);
+
+  const handleCopyData = useCallback(() => {
+    const conferidos = allocations.filter(item => item.status === 'Conferido');
+    if (conferidos.length === 0) {
+      setCopyFeedback({ type: 'error', message: 'Nada conferido para copiar!' });
+      return;
+    }
+    const header = "MÁQUINA\tITEM\tITEM FINAL\tDESCRIÇÃO\tQUANTIDADE\tOP\n";
+    const rows = conferidos.map(item => {
+      const itemFinalDisplay = item.itensFinaisAgrupados && item.itensFinaisAgrupados.length > 0
+        ? item.itensFinaisAgrupados.join(' / ')
+        : (item.itemFinal || '');
+      return `${item.maquina || ''}\t${item.item || ''}\t${itemFinalDisplay}\t${item.descricao || ''}\t${formatQty(item.quantidade)}\t${item.ordemProducao || ''}`;
+    }).join('\n');
+    copyToClipboard(header + rows, 'Dados completos copiados!');
+  }, [allocations, formatQty, copyToClipboard]);
 
   const handleCopyOP = useCallback(() => {
     if (discardedOps.length === 0) return;
     const rows = discardedOps.map(item => item.ordemProducao).join('\n');
     copyToClipboard(rows, 'Lista de OPs copiada!');
   }, [discardedOps, copyToClipboard]);
-
-  const formatQty = (val) => {
-    const num = parseFloat(val);
-    if (isNaN(num)) return "0,00";
-    return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-  };
 
   const handleSequenciar = () => {
     if (allocations.length === 0) return;
@@ -140,15 +199,17 @@ const App = () => {
     setCopyFeedback({ type: 'success', message: 'Junção local concluída!' });
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     setAllocations([]);
     setDiscardedOps([]);
+    if (user) await deleteDoc(stateDocRef);
     setIsClearModalOpen(false);
-    setCopyFeedback({ type: 'success', message: 'Dados limpos com sucesso.' });
+    setCopyFeedback({ type: 'success', message: 'Tudo limpo, inclusive os salvos.' });
   };
 
   const handleImportExcel = (e) => {
-    const file = e.target.files[0]; if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
     setIsImporting(true);
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -158,14 +219,27 @@ const App = () => {
         const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
         const headers = data[0].map(h => String(h).toUpperCase().trim());
         const rows = data.slice(1);
-        const idx = { maquina: Math.max(headers.indexOf('MÁQUINA'), headers.indexOf('MAQUINA')), item: headers.indexOf('ITEM'), itemFinal: Math.max(headers.indexOf('ITEM FINAL'), headers.indexOf('ITEMFINAL')), descricao: Math.max(headers.indexOf('DESCRIÇÃO'), headers.indexOf('DESCRICAO')), quantidade: headers.indexOf('QUANTIDADE'), op: headers.indexOf('OP') };
+        const idx = {
+          maquina: Math.max(headers.indexOf('MÁQUINA'), headers.indexOf('MAQUINA')),
+          item: headers.indexOf('ITEM'),
+          itemFinal: Math.max(headers.indexOf('ITEM FINAL'), headers.indexOf('ITEMFINAL')),
+          descricao: Math.max(headers.indexOf('DESCRIÇÃO'), headers.indexOf('DESCRICAO')),
+          quantidade: headers.indexOf('QUANTIDADE'),
+          op: headers.indexOf('OP')
+        };
         const newItems = rows.filter(row => row.length > 0 && row[idx.maquina] !== undefined).map((row, index) => {
-          let maq = String(row[idx.maquina] || '').trim(); if (/^\d+$/.test(maq)) maq = `EXT${maq}`;
-          return { id: Date.now() + index, sequencia: '', maquina: maq, item: String(row[idx.item] || ''), itemFinal: String(row[idx.itemFinal] || ''), descricao: String(row[idx.descricao] || ''), quantidade: parseFloat(String(row[idx.quantidade] || 0).replace('.', '').replace(',', '.')) || 0, ordemProducao: String(row[idx.op] || ''), perdaCount: 0, status: 'Pendente' };
+          let maq = String(row[idx.maquina] || '').trim();
+          if (/^\d+$/.test(maq)) maq = `EXT${maq}`;
+          return {
+            id: Date.now() + index,
+            sequencia: '', maquina: maq, item: String(row[idx.item] || ''),
+            itemFinal: String(row[idx.itemFinal] || ''), descricao: String(row[idx.descricao] || ''),
+            quantidade: parseFloat(String(row[idx.quantidade] || 0).replace('.', '').replace(',', '.')) || 0,
+            ordemProducao: String(row[idx.op] || ''), perdaCount: 0, status: 'Pendente'
+          };
         });
         setAllocations(prev => [...prev, ...newItems]);
-        setCopyFeedback({ type: 'success', message: 'Importação concluída!' });
-      } catch (err) { setCopyFeedback({ type: 'error', message: 'Erro no Excel.' }); }
+      } catch (err) { setCopyFeedback({ type: 'error', message: 'Erro na importação.' }); }
       finally { setIsImporting(false); e.target.value = null; }
     };
     reader.readAsBinaryString(file);
@@ -174,9 +248,9 @@ const App = () => {
   const handleSave = (e) => {
     e.preventDefault();
     const qty = parseFloat(String(formData.quantidade).replace(',', '.'));
-    const dataToSave = { ...formData, id: editingId || Date.now(), quantidade: isNaN(qty) ? 0 : qty };
-    if (editingId) setAllocations(prev => prev.map(item => item.id === editingId ? dataToSave : item));
-    else setAllocations(prev => [...prev, dataToSave]);
+    const dataToSave = { ...formData, quantidade: isNaN(qty) ? 0 : qty };
+    if (editingId) setAllocations(prev => prev.map(item => item.id === editingId ? { ...dataToSave, id: editingId } : item));
+    else setAllocations(prev => [...prev, { ...dataToSave, id: Date.now() }]);
     setIsModalOpen(false);
   };
 
@@ -196,6 +270,15 @@ const App = () => {
     const newQty = (parseFloat(item.quantidade) || 0) - (currentCount * parseFloat(lossValue));
     setAllocations(prev => prev.map(a => a.id === item.id ? { ...a, quantidade: newQty, perdaCount: 0 } : a));
   };
+
+  const filtered = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return allocations.filter(item => 
+      String(item.maquina || '').toLowerCase().includes(term) || 
+      String(item.item || '').toLowerCase().includes(term) || 
+      String(item.ordemProducao || '').toLowerCase().includes(term)
+    );
+  }, [allocations, searchTerm]);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20">
@@ -224,17 +307,19 @@ const App = () => {
             </div>
             <div className="flex flex-wrap gap-2 w-full lg:w-auto">
               <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(null); setFormData({ sequencia: '', maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente' }); setIsModalOpen(true); }} disabled={allocations.length >= MAX_ROWS} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-2xl transition-all shadow-lg font-black text-xs uppercase tracking-widest"><Icons.Plus /> Nova Alocação</button>
-              <button onClick={() => setIsClearModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-black text-xs uppercase hover:bg-red-600 hover:text-white transition-all shadow-md shadow-red-50"><Icons.Trash /> Limpar</button>
+              <div className="flex gap-2">
+                <button onClick={handleSaveToCloud} disabled={isSaving} className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50">
+                  {isSaving ? <Icons.Loader2 className="animate-spin" /> : <Icons.Save />} Salvar
+                </button>
+                <button onClick={() => setIsClearModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-black text-xs uppercase hover:bg-red-600 hover:text-white transition-all shadow-md shadow-red-50"><Icons.Trash /> Limpar</button>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
             <button onClick={() => fileInputRef.current.click()} disabled={isImporting} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black disabled:opacity-50">{isImporting ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Import />} Incluir</button>
             <button onClick={handleSequenciar} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black transition-all"><Icons.ListOrdered /> Sequenciar</button>
             <button onClick={handleJuncao} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black transition-all"><Icons.Layers /> Junção</button>
-            <button onClick={() => {
-              const rows = allocations.filter(i => i.status === 'Conferido').map(i => `${i.maquina}\t${i.item}\t${i.itemFinal}\t${i.quantidade}\t${i.ordemProducao}`).join('\n');
-              copyToClipboard(rows, 'Copiado para Excel!');
-            }} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black active:scale-95 transition-all"><Icons.Copy /> Copiar Dados</button>
+            <button onClick={handleCopyData} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black active:scale-95 transition-all"><Icons.Copy /> Copiar Dados</button>
           </div>
         </section>
 
@@ -289,7 +374,7 @@ const App = () => {
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(item.id); setFormData(item); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Icons.Edit /></button>
-                            <button onClick={() => { if(window.confirm('Eliminar?')) setAllocations(prev => prev.filter(a => a.id !== item.id)) }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Icons.Trash /></button>
+                            <button onClick={() => setAllocations(prev => prev.filter(a => a.id !== item.id))} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Icons.Trash /></button>
                           </div>
                         </td>
                       </tr>
@@ -316,7 +401,9 @@ const App = () => {
           </div>
           <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center text-[10px] font-black uppercase tracking-widest mt-auto">
             <span className="text-slate-500">Total: <span className={allocations.length >= MAX_ROWS ? 'text-red-600' : 'text-blue-600'}>{allocations.length} / {MAX_ROWS}</span></span>
-            <span className="text-[9px] text-slate-300 italic uppercase">Processamento local instantâneo</span>
+            <span className="text-[9px] text-slate-300 italic flex items-center gap-2">
+              <Icons.Save /> Salve manualmente para persistir entre sessões
+            </span>
           </div>
         </section>
 
@@ -331,7 +418,6 @@ const App = () => {
         </section>
       </main>
 
-      {/* Modais de Ajustes e Edição */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden p-8">

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 // Definição manual de ícones SVG para garantir estabilidade e máxima velocidade
 const Icons = {
   Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
-  Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" cy="21" x2="16.65" y2="16.65"></line></svg>,
+  Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
   Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>,
   Edit: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
   Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
@@ -16,6 +16,8 @@ const Icons = {
   Layers: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>,
   Copy: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>,
   Save: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>,
+  Undo: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>,
+  TrendingUp: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>,
   Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
   X: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
   Pencil: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>,
@@ -47,10 +49,16 @@ const App = () => {
   const [lossValue, setLossValue] = useState(200);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Estado para Histórico de Desfazer (Undo)
+  const [history, setHistory] = useState([]);
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  
+  // Custom delete states (Substitui confirmação nativa do browser)
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
   
   const [editingId, setEditingId] = useState(null);
   const [isQtyOnlyMode, setIsQtyOnlyMode] = useState(false);
@@ -65,33 +73,79 @@ const App = () => {
     quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente'
   });
 
-  const stateDocRef = doc(db, 'settings', 'snapshot_alocacao');
+  // Caminho único para o Snapshot do Estado Público
+  const stateDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'appState', 'snapshot');
 
+  // Inicialização Auth e Carregamento Automático
   useEffect(() => {
     const initAuth = async () => {
       signInAnonymously(auth).catch(console.error);
-      onAuthStateChanged(auth, async (u) => {
-        setUser(u);
-        if (u) {
-          const docSnap = await getDoc(stateDocRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.allocations) setAllocations(data.allocations);
-            if (data.discardedOps) setDiscardedOps(data.discardedOps);
-            if (data.lossValue) setLossValue(data.lossValue);
-          }
-        }
-      });
     };
     initAuth();
-    if (!window.XLSX) {
-      const script = document.createElement('script');
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-      script.async = true;
-      document.body.appendChild(script);
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (loggedUser) => {
+      setUser(loggedUser);
+      if (loggedUser) {
+        const docSnap = await getDoc(stateDocRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.allocations) setAllocations(data.allocations);
+          if (data.discardedOps) setDiscardedOps(data.discardedOps);
+          if (data.lossValue) setLossValue(data.lossValue);
+        }
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
+  // Guarda uma cópia do estado atual no histórico antes de efetuar alterações
+  const pushToHistory = useCallback((currentAllocations, currentDiscarded) => {
+    setHistory(prev => {
+      const updated = [...prev, { 
+        allocations: JSON.parse(JSON.stringify(currentAllocations)), 
+        discardedOps: JSON.parse(JSON.stringify(currentDiscarded)) 
+      }];
+      if (updated.length > 20) updated.shift();
+      return updated;
+    });
+  }, []);
+
+  // Função para Desfazer a última ação
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) {
+      setCopyFeedback({ type: 'error', message: 'Nada para desfazer!' });
+      return;
+    }
+    const previousState = history[history.length - 1];
+    setAllocations(previousState.allocations);
+    setDiscardedOps(previousState.discardedOps);
+    setHistory(prev => prev.slice(0, -1));
+    setCopyFeedback({ type: 'success', message: 'Ação desfeita!' });
+  }, [history]);
+
+  // Captura de atalho Ctrl+Z no teclado
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        const activeTag = document.activeElement?.tagName.toLowerCase();
+        if (activeTag !== 'input' && activeTag !== 'textarea') {
+          e.preventDefault();
+          handleUndo();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo]);
+
+  // Cálculos de Indicadores da Tabela
+  const stats = useMemo(() => {
+    const total = allocations.length;
+    const checked = allocations.filter(item => item.status === 'Conferido').length;
+    const percentage = total > 0 ? Math.round((checked / total) * 100) : 0;
+    return { total, checked, percentage };
+  }, [allocations]);
+
+  // Função para Guardar Manualmente na nuvem
   const handleSaveToCloud = async () => {
     if (!user) return;
     setIsSaving(true);
@@ -109,6 +163,13 @@ const App = () => {
       setIsSaving(false);
     }
   };
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
 
   useEffect(() => {
     if (copyFeedback) {
@@ -164,6 +225,7 @@ const App = () => {
 
   const handleSequenciar = () => {
     if (allocations.length === 0) return;
+    pushToHistory(allocations, discardedOps);
     let currentSeq = 1;
     const sequencedData = allocations.map((item, index, arr) => {
       if (index > 0) {
@@ -174,11 +236,12 @@ const App = () => {
       return { ...item, sequencia: currentSeq };
     });
     setAllocations(sequencedData);
-    setCopyFeedback({ type: 'success', message: 'Sequenciamento local concluído!' });
+    setCopyFeedback({ type: 'success', message: 'Sequenciamento concluído!' });
   };
 
   const handleJuncao = () => {
     if (allocations.length === 0) return;
+    pushToHistory(allocations, discardedOps);
     const grouped = {};
     const discarded = [];
     allocations.forEach((item) => {
@@ -200,6 +263,7 @@ const App = () => {
   };
 
   const handleClearAll = async () => {
+    pushToHistory(allocations, discardedOps);
     setAllocations([]);
     setDiscardedOps([]);
     if (user) await deleteDoc(stateDocRef);
@@ -214,6 +278,7 @@ const App = () => {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
+        pushToHistory(allocations, discardedOps);
         const bstr = evt.target.result;
         const wb = window.XLSX.read(bstr, { type: 'binary' });
         const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
@@ -247,6 +312,7 @@ const App = () => {
 
   const handleSave = (e) => {
     e.preventDefault();
+    pushToHistory(allocations, discardedOps);
     const qty = parseFloat(String(formData.quantidade).replace(',', '.'));
     const dataToSave = { ...formData, quantidade: isNaN(qty) ? 0 : qty };
     if (editingId) setAllocations(prev => prev.map(item => item.id === editingId ? { ...dataToSave, id: editingId } : item));
@@ -255,20 +321,31 @@ const App = () => {
   };
 
   const toggleStatus = (item) => {
+    pushToHistory(allocations, discardedOps);
     const newStatus = item.status === 'Pendente' ? 'Conferido' : 'Pendente';
     setAllocations(prev => prev.map(a => a.id === item.id ? { ...a, status: newStatus } : a));
   };
 
   const handleAddPerda = (item) => {
+    pushToHistory(allocations, discardedOps);
     const newQty = (parseFloat(item.quantidade) || 0) + parseFloat(lossValue);
     const newCount = (item.perdaCount || 0) + 1;
-    setAllocations(prev => prev.map(a => a.id === item.id ? { ...a, quantidade: newQty, perdaCount: newCount } : a));
+    setAllocations(prev => prev.map(a => a.id === item.id ? { ...a, Castle_quantidade: newQty, quantidade: newQty, perdaCount: newCount } : a));
   };
 
   const handleResetPerda = (item) => {
+    pushToHistory(allocations, discardedOps);
     const currentCount = item.perdaCount || 0;
     const newQty = (parseFloat(item.quantidade) || 0) - (currentCount * parseFloat(lossValue));
     setAllocations(prev => prev.map(a => a.id === item.id ? { ...a, quantidade: newQty, perdaCount: 0 } : a));
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTargetId) return;
+    pushToHistory(allocations, discardedOps);
+    setAllocations(prev => prev.filter(a => a.id !== deleteTargetId));
+    setDeleteTargetId(null);
+    setCopyFeedback({ type: 'success', message: 'Alocação eliminada.' });
   };
 
   const filtered = useMemo(() => {
@@ -291,6 +368,7 @@ const App = () => {
 
       <input type="file" ref={fileInputRef} onChange={handleImportExcel} accept=".xlsx, .xls" className="hidden" />
 
+      {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-[1600px] mx-auto px-6 py-4 flex justify-between items-center">
           <h1 className="text-xl font-black tracking-tight text-slate-800 uppercase text-center w-full sm:w-auto">Alocação MG1 - PCP</h1>
@@ -299,6 +377,49 @@ const App = () => {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-6 py-8 flex flex-col gap-6">
+        
+        {/* INDICADOR: EFICIÊNCIA DE CONFERÊNCIA */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Painel Geral</span>
+              <h3 className="text-2xl font-black text-slate-800 tabular-nums">
+                {stats.total} <span className="text-xs font-bold text-slate-400 uppercase">Alocações Planeadas</span>
+              </h3>
+            </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+              <Icons.ClipboardList />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Rendimento</span>
+                <h3 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                  <span className="text-emerald-500"><Icons.TrendingUp /></span>
+                  <span className="tabular-nums">Eficiência de Conferência</span>
+                </h3>
+              </div>
+              <span className="text-2xl font-black text-emerald-600 tabular-nums bg-emerald-50 px-3.5 py-1.5 rounded-2xl border border-emerald-100">
+                {stats.percentage}%
+              </span>
+            </div>
+            
+            <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
+              <div 
+                className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
+                style={{ width: `${stats.percentage}%` }}
+              ></div>
+            </div>
+            <div className="flex justify-between items-center mt-2 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+              <span>{stats.checked} Conferidos</span>
+              <span>{stats.total - stats.checked} Pendentes</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Barra de Ferramentas - Botões Pretos */}
         <section className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
           <div className="flex flex-col lg:flex-row gap-4 justify-between items-center">
             <div className="relative w-full lg:w-[450px]">
@@ -307,7 +428,16 @@ const App = () => {
             </div>
             <div className="flex flex-wrap gap-2 w-full lg:w-auto">
               <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(null); setFormData({ sequencia: '', maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente' }); setIsModalOpen(true); }} disabled={allocations.length >= MAX_ROWS} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-2xl transition-all shadow-lg font-black text-xs uppercase tracking-widest"><Icons.Plus /> Nova Alocação</button>
+              
               <div className="flex gap-2">
+                <button 
+                  onClick={handleUndo} 
+                  disabled={history.length === 0} 
+                  className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md ${history.length === 0 ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-100'}`}
+                  title="Anular última ação (Ctrl + Z)"
+                >
+                  <Icons.Undo /> Desfazer
+                </button>
                 <button onClick={handleSaveToCloud} disabled={isSaving} className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50">
                   {isSaving ? <Icons.Loader2 className="animate-spin" /> : <Icons.Save />} Salvar
                 </button>
@@ -323,6 +453,7 @@ const App = () => {
           </div>
         </section>
 
+        {/* Tabela Principal */}
         <section className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
           <div className="overflow-x-auto min-h-[300px]">
             <table className="w-full text-left border-collapse">
@@ -365,7 +496,12 @@ const App = () => {
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
                             <button onClick={() => handleAddPerda(item)} className={`min-w-[64px] py-2 rounded-xl text-xs font-black transition-all border-2 active:scale-95 shadow-sm ${(item.perdaCount || 0) > 0 ? 'bg-emerald-500 text-white border-emerald-600 shadow-md' : 'bg-white text-slate-300 border-slate-100 hover:border-slate-300'}`}>{lossValue}</button>
-                            {(item.perdaCount || 0) > 0 && <button onClick={() => handleResetPerda(item)} className="text-slate-300 hover:text-red-400"><Icons.Refresh /></button>}
+                            {(item.perdaCount || 0) > 0 && (
+                              <div className="flex flex-col items-start">
+                                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100">{item.perdaCount}x</span>
+                                <button onClick={() => handleResetPerda(item)} className="text-[8px] font-black text-slate-300 hover:text-red-400 uppercase tracking-tighter flex items-center gap-0.5"><Icons.Refresh /> reset</button>
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center">
@@ -374,7 +510,7 @@ const App = () => {
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(item.id); setFormData(item); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Icons.Edit /></button>
-                            <button onClick={() => setAllocations(prev => prev.filter(a => a.id !== item.id))} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Icons.Trash /></button>
+                            <button onClick={() => setDeleteTargetId(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Icons.Trash /></button>
                           </div>
                         </td>
                       </tr>
@@ -407,20 +543,52 @@ const App = () => {
           </div>
         </section>
 
+        {/* OPS DESCARTADAS */}
         <section className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden max-w-2xl">
           <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Icons.ClipboardList /> OPS DESCARTADAS</h2>
+            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <Icons.ClipboardList /> 
+              OPS DESCARTADAS 
+              <span className="ml-1 bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md text-[10px]">{discardedOps.length}</span>
+            </h2>
             <button onClick={handleCopyOP} className="flex items-center gap-2 px-5 py-2 bg-pink-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-pink-600 active:scale-95 transition-all"><Icons.Copy /> Copiar OP</button>
           </div>
-          <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
-             {discardedOps.map((op, idx) => <div key={idx} className="px-6 py-3 font-bold text-slate-700 text-xs flex justify-between"><span>{op.maquina || '-'}</span><span className="font-mono text-slate-500">{op.ordemProducao || '-'}</span></div>)}
+          <div className="max-h-[300px] overflow-y-auto">
+            <table className="w-full text-left border-collapse">
+              <tbody className="divide-y divide-slate-100">
+                {discardedOps.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-3 font-bold text-slate-700 text-xs">{item.maquina || '-'}</td>
+                    <td className="px-6 py-3 font-bold text-slate-500 font-mono text-xs">{item.ordemProducao || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       </main>
 
+      {/* MODAL PERSONALIZADO DE CONFIRMAÇÃO DE ELIMINAÇÃO */}
+      {deleteTargetId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8 text-center animate-in zoom-in duration-200">
+            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Icons.Trash />
+            </div>
+            <h2 className="text-xl font-black text-slate-800 uppercase mb-2">Eliminar Item?</h2>
+            <p className="text-slate-500 text-sm font-medium mb-8">Esta ação irá apagar esta alocação de forma definitiva.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTargetId(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button>
+              <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Sim, Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ajustes */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden p-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8">
             <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Ajustes</h2><button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-slate-100 rounded-full"><Icons.X /></button></div>
             <div className="space-y-6">
               <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Valor da Perda (kg)</label><div className="relative"><input type="number" className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-2xl font-black focus:border-blue-500 focus:outline-none" value={lossValue} onChange={(e) => setLossValue(e.target.value)} /><span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-300">kg</span></div></div>
@@ -430,20 +598,22 @@ const App = () => {
         </div>
       )}
 
+      {/* Modal Confirmação Limpar */}
       {isClearModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8 text-center">
             <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Alert /></div>
             <h2 className="text-xl font-black text-slate-800 uppercase mb-2">Limpar Tudo?</h2>
-            <p className="text-slate-500 text-sm font-medium mb-8">Apagar todos os dados desta sessão? Esta ação não pode ser desfeita.</p>
+            <p className="text-slate-500 text-sm font-medium mb-8">Apagar todos os dados locais e também os salvos na nuvem? Esta ação não pode ser desfeita.</p>
             <div className="flex gap-3"><button onClick={() => setIsClearModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button><button onClick={handleClearAll} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Sim, Limpar</button></div>
           </div>
         </div>
       )}
 
+      {/* Modal Cadastro/Edição */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-20">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in">
             <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50"><h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">{isQtyOnlyMode ? 'Ajustar Peso' : (editingId ? 'Editar Alocação' : 'Nova Alocação')}</h2><button onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full"><Icons.X /></button></div>
             <form onSubmit={handleSave} className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-4">
@@ -455,7 +625,7 @@ const App = () => {
                     <div className="col-span-1"><label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Máquina</label><input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={formData.maquina} onChange={(e) => setFormData({...formData, maquina: e.target.value})} /></div>
                     <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Item</label><input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={formData.item} onChange={(e) => setFormData({...formData, item: e.target.value})} /></div>
                     <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Item Final</label><input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={formData.itemFinal} onChange={(e) => setFormData({...formData, itemFinal: e.target.value})} placeholder="(Opcional)" /></div>
-                    <div className="col-span-2"><label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Descrição</label><textarea className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl h-24 resize-none font-medium" value={formData.descricao} onChange={(e) => setFormData({...formData, descricao: e.target.value})}></textarea></div>
+                    <div className="col-span-2"><label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Descrição</label><textarea className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl h-24 resize-none" value={formData.descricao} onChange={(e) => setFormData({...formData, descricao: e.target.value})}></textarea></div>
                     <div><label className="block text-[10px] font-black text-blue-500 uppercase mb-2 font-black">Qtd (kg)</label><input required type="number" step="0.01" className="w-full px-4 py-3 bg-slate-50 border border-blue-200 rounded-xl font-bold" value={formData.quantidade} onChange={(e) => setFormData({...formData, quantidade: e.target.value})} /></div>
                     <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-2">OP</label><input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={formData.ordemProducao} onChange={(e) => setFormData({...formData, ordemProducao: e.target.value})} /></div>
                   </>

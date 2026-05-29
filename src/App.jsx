@@ -6,7 +6,7 @@ import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore
 // Definição manual de ícones SVG para garantir estabilidade e máxima velocidade
 const Icons = {
   Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
-  Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
+  Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" cy="21" x2="16.65" y2="16.65"></line></svg>,
   Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>,
   Edit: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
   Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
@@ -24,6 +24,8 @@ const Icons = {
   ListOrdered: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path></svg>,
   Refresh: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>,
   ClipboardList: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><line x1="8" y1="11" x2="8" y2="11"></line><line x1="8" y1="16" x2="8" y2="16"></line><line x1="12" y1="11" x2="16" y2="11"></line><line x1="12" y1="16" x2="16" y2="16"></line></svg>,
+  Lock: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>,
+  Unlock: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>,
   Loader2: ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
 };
 
@@ -45,11 +47,13 @@ const appId = 'alocacao-mg1-pcp';
 const App = () => {
   const [user, setUser] = useState(null);
   const [allocations, setAllocations] = useState([]);
-  const [discardedOps, setDiscardedOps] = useState([]);
   const [lossValue, setLossValue] = useState(200);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Estado para Histórico de Desfazer (Undo)
+  // Novo Estado de Proteção / Modo Leitura
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  
+  // Estado para Histórico de Desfazer (Undo) - Sincronizado e simplificado para máxima velocidade
   const [history, setHistory] = useState([]);
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,31 +83,34 @@ const App = () => {
   // Inicialização Auth e Carregamento Automático
   useEffect(() => {
     const initAuth = async () => {
-      signInAnonymously(auth).catch(console.error);
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (loggedUser) => {
+      let loggedUser;
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        const result = await signInWithCustomToken(auth, __initial_auth_token);
+        loggedUser = result.user;
+      } else {
+        const result = await signInAnonymously(auth);
+        loggedUser = result.user;
+      }
       setUser(loggedUser);
+      
       if (loggedUser) {
         const docSnap = await getDoc(stateDocRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
           if (data.allocations) setAllocations(data.allocations);
-          if (data.discardedOps) setDiscardedOps(data.discardedOps);
           if (data.lossValue) setLossValue(data.lossValue);
         }
       }
-    });
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
 
   // Guarda uma cópia do estado atual no histórico antes de efetuar alterações
-  const pushToHistory = useCallback((currentAllocations, currentDiscarded) => {
+  const pushToHistory = useCallback((currentAllocations) => {
     setHistory(prev => {
-      const updated = [...prev, { 
-        allocations: JSON.parse(JSON.stringify(currentAllocations)), 
-        discardedOps: JSON.parse(JSON.stringify(currentDiscarded)) 
-      }];
+      const updated = [...prev, JSON.parse(JSON.stringify(currentAllocations))];
       if (updated.length > 20) updated.shift();
       return updated;
     });
@@ -111,16 +118,19 @@ const App = () => {
 
   // Função para Desfazer a última ação
   const handleUndo = useCallback(() => {
+    if (isReadOnly) {
+      setCopyFeedback({ type: 'error', message: 'Desative o Modo Leitura para anular ações.' });
+      return;
+    }
     if (history.length === 0) {
       setCopyFeedback({ type: 'error', message: 'Nada para desfazer!' });
       return;
     }
-    const previousState = history[history.length - 1];
-    setAllocations(previousState.allocations);
-    setDiscardedOps(previousState.discardedOps);
+    const previousAllocations = history[history.length - 1];
+    setAllocations(previousAllocations);
     setHistory(prev => prev.slice(0, -1));
     setCopyFeedback({ type: 'success', message: 'Ação desfeita!' });
-  }, [history]);
+  }, [history, isReadOnly]);
 
   // Captura de atalho Ctrl+Z no teclado
   useEffect(() => {
@@ -145,6 +155,16 @@ const App = () => {
     return { total, checked, percentage };
   }, [allocations]);
 
+  // Filtragem e pesquisa em tempo real
+  const filtered = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return allocations.filter(item => 
+      String(item.maquina || '').toLowerCase().includes(term) || 
+      String(item.item || '').toLowerCase().includes(term) || 
+      String(item.ordemProducao || '').toLowerCase().includes(term)
+    );
+  }, [allocations, searchTerm]);
+
   // Função para Guardar Manualmente na nuvem
   const handleSaveToCloud = async () => {
     if (!user) return;
@@ -152,7 +172,6 @@ const App = () => {
     try {
       await setDoc(stateDocRef, {
         allocations,
-        discardedOps,
         lossValue,
         updatedAt: Date.now()
       });
@@ -217,15 +236,10 @@ const App = () => {
     copyToClipboard(header + rows, 'Dados completos copiados!');
   }, [allocations, formatQty, copyToClipboard]);
 
-  const handleCopyOP = useCallback(() => {
-    if (discardedOps.length === 0) return;
-    const rows = discardedOps.map(item => item.ordemProducao).join('\n');
-    copyToClipboard(rows, 'Lista de OPs copiada!');
-  }, [discardedOps, copyToClipboard]);
-
   const handleSequenciar = () => {
+    if (isReadOnly) return;
     if (allocations.length === 0) return;
-    pushToHistory(allocations, discardedOps);
+    pushToHistory(allocations);
     let currentSeq = 1;
     const sequencedData = allocations.map((item, index, arr) => {
       if (index > 0) {
@@ -240,10 +254,10 @@ const App = () => {
   };
 
   const handleJuncao = () => {
+    if (isReadOnly) return;
     if (allocations.length === 0) return;
-    pushToHistory(allocations, discardedOps);
+    pushToHistory(allocations);
     const grouped = {};
-    const discarded = [];
     allocations.forEach((item) => {
       const seq = item.sequencia || 'sem-seq';
       const cleanItemFinal = String(item.itemFinal || '').trim();
@@ -254,31 +268,31 @@ const App = () => {
         if (cleanItemFinal && !grouped[seq].itensFinaisAgrupados.includes(cleanItemFinal)) {
           grouped[seq].itensFinaisAgrupados.push(cleanItemFinal);
         }
-        discarded.push({ maquina: item.maquina, ordemProducao: item.ordemProducao });
       }
     });
     setAllocations(Object.values(grouped));
-    setDiscardedOps(prev => [...prev, ...discarded]);
     setCopyFeedback({ type: 'success', message: 'Junção local concluída!' });
   };
 
+  // Limpa o ecrã e também a base de dados
   const handleClearAll = async () => {
-    pushToHistory(allocations, discardedOps);
+    if (isReadOnly) return;
+    pushToHistory(allocations);
     setAllocations([]);
-    setDiscardedOps([]);
     if (user) await deleteDoc(stateDocRef);
     setIsClearModalOpen(false);
     setCopyFeedback({ type: 'success', message: 'Tudo limpo, inclusive os salvos.' });
   };
 
   const handleImportExcel = (e) => {
+    if (isReadOnly) return;
     const file = e.target.files[0];
     if (!file) return;
     setIsImporting(true);
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        pushToHistory(allocations, discardedOps);
+        pushToHistory(allocations);
         const bstr = evt.target.result;
         const wb = window.XLSX.read(bstr, { type: 'binary' });
         const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
@@ -312,7 +326,8 @@ const App = () => {
 
   const handleSave = (e) => {
     e.preventDefault();
-    pushToHistory(allocations, discardedOps);
+    if (isReadOnly) return;
+    pushToHistory(allocations);
     const qty = parseFloat(String(formData.quantidade).replace(',', '.'));
     const dataToSave = { ...formData, quantidade: isNaN(qty) ? 0 : qty };
     if (editingId) setAllocations(prev => prev.map(item => item.id === editingId ? { ...dataToSave, id: editingId } : item));
@@ -321,41 +336,35 @@ const App = () => {
   };
 
   const toggleStatus = (item) => {
-    pushToHistory(allocations, discardedOps);
+    if (isReadOnly) return;
+    pushToHistory(allocations);
     const newStatus = item.status === 'Pendente' ? 'Conferido' : 'Pendente';
     setAllocations(prev => prev.map(a => a.id === item.id ? { ...a, status: newStatus } : a));
   };
 
   const handleAddPerda = (item) => {
-    pushToHistory(allocations, discardedOps);
+    if (isReadOnly) return;
+    pushToHistory(allocations);
     const newQty = (parseFloat(item.quantidade) || 0) + parseFloat(lossValue);
     const newCount = (item.perdaCount || 0) + 1;
-    setAllocations(prev => prev.map(a => a.id === item.id ? { ...a, Castle_quantidade: newQty, quantidade: newQty, perdaCount: newCount } : a));
+    setAllocations(prev => prev.map(a => a.id === item.id ? { ...a, quantidade: newQty, perdaCount: newCount } : a));
   };
 
   const handleResetPerda = (item) => {
-    pushToHistory(allocations, discardedOps);
+    if (isReadOnly) return;
+    pushToHistory(allocations);
     const currentCount = item.perdaCount || 0;
     const newQty = (parseFloat(item.quantidade) || 0) - (currentCount * parseFloat(lossValue));
     setAllocations(prev => prev.map(a => a.id === item.id ? { ...a, quantidade: newQty, perdaCount: 0 } : a));
   };
 
   const confirmDelete = () => {
-    if (!deleteTargetId) return;
-    pushToHistory(allocations, discardedOps);
+    if (!deleteTargetId || isReadOnly) return;
+    pushToHistory(allocations);
     setAllocations(prev => prev.filter(a => a.id !== deleteTargetId));
     setDeleteTargetId(null);
     setCopyFeedback({ type: 'success', message: 'Alocação eliminada.' });
   };
-
-  const filtered = useMemo(() => {
-    const term = searchTerm.toLowerCase();
-    return allocations.filter(item => 
-      String(item.maquina || '').toLowerCase().includes(term) || 
-      String(item.item || '').toLowerCase().includes(term) || 
-      String(item.ordemProducao || '').toLowerCase().includes(term)
-    );
-  }, [allocations, searchTerm]);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20">
@@ -370,9 +379,30 @@ const App = () => {
 
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-[1600px] mx-auto px-6 py-4 flex justify-between items-center">
+        <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
           <h1 className="text-xl font-black tracking-tight text-slate-800 uppercase text-center w-full sm:w-auto">Alocação MG1 - PCP</h1>
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Icons.Settings /></button>
+          
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-end">
+            {/* BOTÃO CADEADO: MODO LEITURA VS MODO EDIÇÃO */}
+            <button 
+              onClick={() => {
+                setIsReadOnly(!isReadOnly);
+                setCopyFeedback({
+                  type: 'success',
+                  message: !isReadOnly ? 'Modo Leitura ativo!' : 'Modo Edição ativo!'
+                });
+              }} 
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl border transition-all font-black text-xs uppercase tracking-wider shadow-md ${isReadOnly ? 'bg-amber-500 text-white border-amber-600 shadow-amber-100' : 'bg-slate-800 text-white border-slate-900'}`}
+              title={isReadOnly ? "Mudar para Modo Edição" : "Mudar para Modo Leitura"}
+            >
+              {isReadOnly ? <Icons.Lock /> : <Icons.Unlock />}
+              <span>{isReadOnly ? "Modo Leitura" : "Modo Edição"}</span>
+            </button>
+            
+            <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all">
+              <Icons.Settings />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -427,28 +457,63 @@ const App = () => {
               <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all text-sm font-medium" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-              <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(null); setFormData({ sequencia: '', maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente' }); setIsModalOpen(true); }} disabled={allocations.length >= MAX_ROWS} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-2xl transition-all shadow-lg font-black text-xs uppercase tracking-widest"><Icons.Plus /> Nova Alocação</button>
+              <button 
+                onClick={() => { setIsQtyOnlyMode(false); setEditingId(null); setFormData({ sequencia: '', maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente' }); setIsModalOpen(true); }} 
+                disabled={isReadOnly || allocations.length >= MAX_ROWS} 
+                className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 text-white rounded-2xl transition-all shadow-lg font-black text-xs uppercase tracking-widest ${isReadOnly ? 'bg-slate-400 cursor-not-allowed opacity-50 shadow-none' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
+                <Icons.Plus /> Nova Alocação
+              </button>
               
+              {/* ÁREA DE SALVAMENTO E LIMPEZA COM UNDO */}
               <div className="flex gap-2">
                 <button 
                   onClick={handleUndo} 
-                  disabled={history.length === 0} 
-                  className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md ${history.length === 0 ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-100'}`}
+                  disabled={isReadOnly || history.length === 0} 
+                  className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md ${isReadOnly || history.length === 0 ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-100'}`}
                   title="Anular última ação (Ctrl + Z)"
                 >
                   <Icons.Undo /> Desfazer
                 </button>
-                <button onClick={handleSaveToCloud} disabled={isSaving} className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50">
+                <button 
+                  onClick={handleSaveToCloud} 
+                  disabled={isSaving || isReadOnly} 
+                  className={`flex items-center gap-2 px-6 py-3 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg ${isReadOnly ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50 shadow-none' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-50'}`}
+                >
                   {isSaving ? <Icons.Loader2 className="animate-spin" /> : <Icons.Save />} Salvar
                 </button>
-                <button onClick={() => setIsClearModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-black text-xs uppercase hover:bg-red-600 hover:text-white transition-all shadow-md shadow-red-50"><Icons.Trash /> Limpar</button>
+                <button 
+                  onClick={() => setIsClearModalOpen(true)} 
+                  disabled={isReadOnly}
+                  className={`flex items-center gap-2 px-6 py-3 border rounded-2xl font-black text-xs uppercase transition-all shadow-md ${isReadOnly ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed shadow-none' : 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white shadow-red-50'}`}
+                >
+                  <Icons.Trash /> Limpar
+                </button>
               </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
-            <button onClick={() => fileInputRef.current.click()} disabled={isImporting} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black disabled:opacity-50">{isImporting ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Import />} Incluir</button>
-            <button onClick={handleSequenciar} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black transition-all"><Icons.ListOrdered /> Sequenciar</button>
-            <button onClick={handleJuncao} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black transition-all"><Icons.Layers /> Junção</button>
+            <button 
+              onClick={() => fileInputRef.current.click()} 
+              disabled={isImporting || isReadOnly} 
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black disabled:opacity-50'}`}
+            >
+              {isImporting ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Import />} Incluir
+            </button>
+            <button 
+              onClick={handleSequenciar} 
+              disabled={isReadOnly}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-black'}`}
+            >
+              <Icons.ListOrdered /> Sequenciar
+            </button>
+            <button 
+              onClick={handleJuncao} 
+              disabled={isReadOnly}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-black'}`}
+            >
+              <Icons.Layers /> Junção
+            </button>
             <button onClick={handleCopyData} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black active:scale-95 transition-all"><Icons.Copy /> Copiar Dados</button>
           </div>
         </section>
@@ -468,68 +533,82 @@ const App = () => {
                   <th className="px-6 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500">OP</th>
                   <th className="px-6 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500 text-center">Perda</th>
                   <th className="px-6 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500 text-center">Status</th>
-                  <th className="px-6 py-5 text-xs font-black text-white uppercase bg-slate-800 text-right">Ações</th>
+                  <th className="px-6 py-5 text-xs font-black text-white uppercase bg-slate-800 text-right">
+                    {isReadOnly ? "Estado" : "Ações"}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((item, index) => {
-                  const nextItem = filtered[index + 1];
-                  const isLastOfSequence = !nextItem || String(item.sequencia) !== String(nextItem?.sequencia);
+                {filtered.map((item) => {
                   return (
-                    <React.Fragment key={item.id}>
-                      <tr className="hover:bg-slate-50 transition-colors group">
-                        <td className="px-4 py-4 text-center font-black text-blue-600">{item.sequencia || '-'}</td>
-                        <td className="px-6 py-4 font-bold text-slate-700 whitespace-nowrap">{item.maquina || '-'}</td>
-                        <td className="px-6 py-4 text-sm font-semibold text-slate-600">{item.item || '-'}</td>
-                        <td className="px-6 py-4 font-mono text-sm text-slate-500">{item.itemFinal || '-'}</td>
-                        <td className="px-6 py-4 text-sm text-slate-500 max-w-[200px] truncate" title={item.descricao}>{item.descricao || '-'}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-center gap-2 group/qty">
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100">
+                      <td className="px-4 py-4 text-center font-black text-blue-600">{item.sequencia || '-'}</td>
+                      <td className="px-6 py-4 font-bold text-slate-700 whitespace-nowrap">{item.maquina || '-'}</td>
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">{item.item || '-'}</td>
+                      
+                      {/* COLUNA DE ITEM FINAL */}
+                      <td className="px-6 py-4 font-mono text-sm text-slate-500">
+                        {item.itensFinaisAgrupados && item.itensFinaisAgrupados.length > 0 
+                          ? item.itensFinaisAgrupados.join(' / ') 
+                          : (item.itemFinal || '-')}
+                      </td>
+                      
+                      <td className="px-6 py-4 text-sm text-slate-500 max-w-[200px] truncate" title={item.descricao}>{item.descricao || '-'}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-2 group/qty">
+                          {/* Lápis de edição oculta no modo leitura */}
+                          {!isReadOnly && (
                             <button onClick={() => { setIsQtyOnlyMode(true); setEditingId(item.id); setFormData(item); setIsModalOpen(true); }} className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover/qty:opacity-100"><Icons.Pencil /></button>
-                            <div className="flex flex-col items-center">
-                              <span className="font-black text-blue-600 text-base tabular-nums">{formatQty(item.quantidade)}</span>
-                              <span className="text-[9px] text-slate-400 uppercase font-black tracking-tighter">kg</span>
+                          )}
+                          <div className="flex flex-col items-center">
+                            <span className="font-black text-blue-600 text-base tabular-nums">{formatQty(item.quantidade)}</span>
+                            <span className="text-[9px] text-slate-400 uppercase font-black tracking-tighter">kg</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-700 whitespace-nowrap">{item.ordemProducao || '-'}</td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {/* Botão de Perda desativado visualmente se no modo leitura */}
+                          <button 
+                            onClick={() => !isReadOnly && handleAddPerda(item)} 
+                            disabled={isReadOnly}
+                            className={`min-w-[64px] py-2 rounded-xl text-xs font-black transition-all border-2 active:scale-95 shadow-sm ${isReadOnly ? 'cursor-not-allowed opacity-60' : ''} ${(item.perdaCount || 0) > 0 ? 'bg-emerald-500 text-white border-emerald-600 shadow-md' : 'bg-white text-slate-300 border-slate-100 hover:border-slate-300'}`}
+                          >
+                            {lossValue}
+                          </button>
+                          {/* Botão reset de perda oculta no modo leitura */}
+                          {!isReadOnly && (item.perdaCount || 0) > 0 && (
+                            <div className="flex flex-col items-start">
+                              <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100">{item.perdaCount}x</span>
+                              <button onClick={() => handleResetPerda(item)} className="text-[8px] font-black text-slate-300 hover:text-red-400 uppercase tracking-tighter flex items-center gap-0.5"><Icons.Refresh /> reset</button>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 font-bold text-slate-700 whitespace-nowrap">{item.ordemProducao || '-'}</td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <button onClick={() => handleAddPerda(item)} className={`min-w-[64px] py-2 rounded-xl text-xs font-black transition-all border-2 active:scale-95 shadow-sm ${(item.perdaCount || 0) > 0 ? 'bg-emerald-500 text-white border-emerald-600 shadow-md' : 'bg-white text-slate-300 border-slate-100 hover:border-slate-300'}`}>{lossValue}</button>
-                            {(item.perdaCount || 0) > 0 && (
-                              <div className="flex flex-col items-start">
-                                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100">{item.perdaCount}x</span>
-                                <button onClick={() => handleResetPerda(item)} className="text-[8px] font-black text-slate-300 hover:text-red-400 uppercase tracking-tighter flex items-center gap-0.5"><Icons.Refresh /> reset</button>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button onClick={() => toggleStatus(item)} className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${item.status === 'Conferido' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'}`}>{item.status === 'Conferido' ? <Icons.Check /> : <Icons.Pending />} {item.status}</button>
-                        </td>
-                        <td className="px-6 py-4 text-right">
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button 
+                          onClick={() => !isReadOnly && toggleStatus(item)} 
+                          disabled={isReadOnly}
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${isReadOnly ? 'cursor-not-allowed opacity-80' : ''} ${item.status === 'Conferido' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'}`}
+                        >
+                          {item.status === 'Conferido' ? <Icons.Check /> : <Icons.Pending />} {item.status}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {/* Seção de ações (Editar / Eliminar) fica oculta ou exibe sinalização de trancado */}
+                        {isReadOnly ? (
+                          <span className="text-amber-500 text-[10px] font-black uppercase tracking-wider bg-amber-50 px-2 py-1 rounded-lg border border-amber-100 inline-flex items-center gap-1">
+                            <Icons.Lock /> Trancado
+                          </span>
+                        ) : (
                           <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(item.id); setFormData(item); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Icons.Edit /></button>
                             <button onClick={() => setDeleteTargetId(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Icons.Trash /></button>
                           </div>
-                        </td>
-                      </tr>
-                      {isLastOfSequence && (
-                        <tr className="bg-slate-200/40 border-b border-slate-300">
-                          <td className="px-4 py-3 text-center font-black text-slate-400 opacity-50 text-[10px]">{item.sequencia || ''}</td>
-                          <td colSpan="9" className="px-6 py-2">
-                            <div className="flex items-center gap-3">
-                              {item.itensFinaisAgrupados && item.itensFinaisAgrupados.length > 0 ? (
-                                <>
-                                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Itens Finais:</span>
-                                  <span className="text-[13px] font-black text-black tracking-tight uppercase">{item.itensFinaisAgrupados.join(' / ')}</span>
-                                </>
-                              ) : <span className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em]">Bloco de Função</span>}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                        )}
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -540,30 +619,6 @@ const App = () => {
             <span className="text-[9px] text-slate-300 italic flex items-center gap-2">
               <Icons.Save /> Salve manualmente para persistir entre sessões
             </span>
-          </div>
-        </section>
-
-        {/* OPS DESCARTADAS */}
-        <section className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden max-w-2xl">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <Icons.ClipboardList /> 
-              OPS DESCARTADAS 
-              <span className="ml-1 bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md text-[10px]">{discardedOps.length}</span>
-            </h2>
-            <button onClick={handleCopyOP} className="flex items-center gap-2 px-5 py-2 bg-pink-500 text-white rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-pink-600 active:scale-95 transition-all"><Icons.Copy /> Copiar OP</button>
-          </div>
-          <div className="max-h-[300px] overflow-y-auto">
-            <table className="w-full text-left border-collapse">
-              <tbody className="divide-y divide-slate-100">
-                {discardedOps.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-3 font-bold text-slate-700 text-xs">{item.maquina || '-'}</td>
-                    <td className="px-6 py-3 font-bold text-slate-500 font-mono text-xs">{item.ordemProducao || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </section>
       </main>

@@ -37,20 +37,12 @@ const Icons = {
   Loader2: ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
 };
 
-// --- CONFIGURAÇÃO FIREBASE REAL (PCP ITAMONTE) ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCP0KtP6sL0M69wq3FpC5Tmq_IL9AtbnsY",
-  authDomain: "pcp-juncao-itamonte.firebaseapp.com",
-  projectId: "pcp-juncao-itamonte",
-  storageBucket: "pcp-juncao-itamonte.firebasestorage.app",
-  messagingSenderId: "827442336306",
-  appId: "1:827442336306:web:653270dc35677b6273e22b"
-};
-
+// Configuração Firebase
+const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'alocacao-mg1-pcp';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'alocacao-mg1-pcp';
 
 // Função auxiliar para conversão de números em formato PT-BR
 const parsePtBrFloat = (val) => {
@@ -945,16 +937,19 @@ const App = () => {
               <thead>
                 <tr className="border-b-2 border-slate-100">
                   <th className="w-[4%] px-2 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500 text-center">Seq.</th>
-                  <th className="w-[8%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Máquina</th>
-                  <th className="w-[8%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Item</th>
-                  <th className="w-[15%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Item Final</th>
-                  <th className="w-[30%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Descrição</th>
-                  <th className="w-[10%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500 text-center">Quantidade</th>
-                  <th className="w-[10%] px-4 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500">OP</th>
-                  <th className="w-[7%] px-2 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500 text-center">Perda</th>
-                  <th className="w-[8%] px-2 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500 text-center">Status</th>
-                  <th className="w-[10%] px-4 py-5 text-xs font-black text-white uppercase bg-slate-800 text-right">
+                  <th className="w-[7%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Máquina</th>
+                  <th className="w-[7%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Item</th>
+                  <th className="w-[12%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Item Final</th>
+                  <th className="w-[24%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500">Descrição</th>
+                  <th className="w-[8%] px-4 py-5 text-xs font-black text-white uppercase bg-blue-600 border-r border-blue-500 text-center">Quantidade</th>
+                  <th className="w-[8%] px-4 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500">OP</th>
+                  <th className="w-[6%] px-2 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500 text-center">Perda</th>
+                  <th className="w-[7%] px-2 py-5 text-xs font-black text-slate-800 uppercase bg-yellow-400 border-r border-yellow-500 text-center">Status</th>
+                  <th className="w-[6%] px-4 py-5 text-xs font-black text-white uppercase bg-slate-800 border-r border-slate-700 text-right">
                     {isReadOnly ? "Estado" : "Ações"}
+                  </th>
+                  <th className="w-[11%] px-2 py-5 text-[10px] font-black text-white uppercase bg-slate-800 text-center">
+                    Estoque de Segurança
                   </th>
                 </tr>
               </thead>
@@ -1026,6 +1021,35 @@ const App = () => {
                           </div>
                         )}
                       </td>
+
+                      {/* CÉLULA DA COLUNA ESTOQUE DE SEGURANÇA */}
+                      <td className="px-2 py-4 text-center">
+                        {(() => {
+                          const stockRules = safetyStocks.filter(s => s.item === String(item.item || '').trim().toUpperCase());
+                          if (stockRules.length === 0) return <span className="text-slate-300 text-[10px] font-bold">-</span>;
+                          return (
+                            <div className="flex flex-col items-center gap-1">
+                              {stockRules.map(stock => {
+                                const qtyToShow = stock.estoque !== undefined && stock.estoque !== null && stock.estoque !== '' 
+                                  ? stock.estoque 
+                                  : stock.quantidade;
+                                return (
+                                  <button
+                                    key={stock.id}
+                                    onClick={() => toggleSafetyStockStatus(stock.id)}
+                                    disabled={isReadOnly}
+                                    className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500 text-white border border-emerald-600 shadow-md hover:bg-emerald-600 transition-all active:scale-95"
+                                    title={`Cliente: ${stock.cliente || 'Geral'} | Qtd Total: ${formatQty(stock.quantidade)} kg | Estoque Atual: ${formatQty(stock.estoque)} kg | Pendente: ${formatQty(stock.pendente)} kg | Disp: ${stock.dataDisponibilidade || '-'}`}
+                                  >
+                                    <Icons.Shield />
+                                    <span>{formatQty(qtyToShow)} kg</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </td>
                     </tr>
                   );
                 })}
@@ -1034,14 +1058,713 @@ const App = () => {
           </div>
           <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center text-[10px] font-black uppercase tracking-widest mt-auto">
             <span className="text-slate-500">Total: <span className={allocations.length >= MAX_ROWS ? 'text-red-600' : 'text-blue-600'}>{allocations.length} / {MAX_ROWS}</span></span>
-            <span className="text-[9px] text-slate-300 italic flex items-center gap-2">
-              <Icons.Save /> Salve manualmente para persistir entre sessões
+            <span className="text-[9px] text-slate-400 italic flex items-center gap-2 font-bold">
+              <Icons.CloudCheck /> Sincronização em tempo real ativa no Firebase
             </span>
           </div>
         </section>
       </main>
 
-      {/* Modais de Confirmação, Ajustes e Edição */}
+      {/* MODAL DE OBSERVAÇÃO - EXTRUSORAS */}
+      {isExtrusorasObsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 my-auto">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <span className="text-blue-600"><Icons.Cpu /></span> Observação - Extrusoras e Capacidade
+              </h2>
+              <button onClick={() => setIsExtrusorasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
+            </div>
+
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                    Grupos de Máquinas & Centro de Produção
+                  </div>
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600 text-[10px] font-black uppercase border-b border-slate-200">
+                        <th className="px-4 py-2 border-r border-slate-200">GRUPO DE MAQUINAS</th>
+                        <th className="px-4 py-2">CENTRO DE PRODUÇÃO</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1001 - 1002 - 1003</td><td className="px-4 py-2 font-black text-blue-600">LISO</td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1004 - 1005</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1010 - 1013</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1015 - 1017</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1016 - 1018</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1019 - 1020</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1032 - 1031</td><td className="px-4 py-2"></td></tr>
+                      <tr className="bg-slate-100/80"><td className="px-4 py-2 border-r border-slate-200 font-black">1007 - 1008 -1012 -1031</td><td className="px-4 py-2 font-black text-emerald-600">FFS</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                    Capacidade de Produção Diária
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="sticky top-0 bg-slate-100 text-slate-600 text-[10px] font-black uppercase border-b border-slate-200">
+                        <tr>
+                          <th className="px-4 py-2 border-r border-slate-200">MAQUINA</th>
+                          <th className="px-4 py-2 text-right">PRODUÇÃO DIARIA – Kg/H</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1001</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1002</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1003</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1004</td><td className="px-4 py-1.5 text-right font-black tabular-nums">400</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1005</td><td className="px-4 py-1.5 text-right font-black tabular-nums">400</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1010</td><td className="px-4 py-1.5 text-right font-black tabular-nums">400</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1013</td><td className="px-4 py-1.5 text-right font-black tabular-nums">280</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1015</td><td className="px-4 py-1.5 text-right font-black tabular-nums">600</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1016</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1017</td><td className="px-4 py-1.5 text-right font-black tabular-nums">600</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1018</td><td className="px-4 py-1.5 text-right font-black tabular-nums">700</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1019</td><td className="px-4 py-1.5 text-right font-black tabular-nums">550</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1020</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1032</td><td className="px-4 py-1.5 text-right font-black tabular-nums">850</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1033</td><td className="px-4 py-1.5 text-right font-black tabular-nums">140</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1007</td><td className="px-4 py-1.5 text-right font-black tabular-nums">170</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1008</td><td className="px-4 py-1.5 text-right font-black tabular-nums">200</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1012</td><td className="px-4 py-1.5 text-right font-black tabular-nums">180</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1031</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                  Divisão de Especialistas
+                </div>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-red-200 shadow-sm">
+                    <div className="font-black text-red-600 text-sm w-28">CLEITON ➔</div>
+                    <div className="text-red-600 font-bold text-xs space-x-1">
+                      <span>1001,</span><span>1002,</span><span>1003,</span><span>1004,</span><span>1005,</span><span>1010,</span><span>1013</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-200 shadow-sm">
+                    <div className="text-emerald-600 font-bold text-xs space-x-1 flex-1">
+                      <span>1015,</span><span>1017,</span><span>1016,</span><span>1018,</span><span>1019,</span><span>1020,</span><span>1032,</span><span>1033</span>
+                    </div>
+                    <div className="font-black text-emerald-600 text-sm w-28 text-right">➔ BENEDITO</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                  Responsáveis pelas Máquinas
+                </div>
+                <table className="w-full text-center border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 text-xs font-black uppercase border-b border-slate-200">
+                      <th className="px-4 py-2.5 border-r border-slate-200 text-red-600">FABIANO</th>
+                      <th className="px-4 py-2.5 border-r border-slate-200 text-emerald-600">DANIEL</th>
+                      <th className="px-4 py-2.5 text-purple-600">RENATO</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-xs font-black">
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1001</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1015</td><td className="px-4 py-1.5 text-purple-600">1007</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1002</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1017</td><td className="px-4 py-1.5 text-purple-600">1008</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1003</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1016</td><td className="px-4 py-1.5 text-purple-600">1012</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1004</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1018</td><td className="px-4 py-1.5 text-purple-600">1031</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1005</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1019</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1010</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1020</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1013</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1032</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-slate-300">-</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1033</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE OBSERVAÇÃO - MATRIZ-CAMADAS */}
+      {isMatrizCamadasObsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-200 my-auto">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <span className="text-blue-600"><Icons.Grid /></span> Observação - Especificações Matriz e Camadas
+              </h2>
+              <button onClick={() => setIsMatrizCamadasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
+            </div>
+
+            <div className="p-8 space-y-6 max-h-[80vh] overflow-y-auto">
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
+                <div className="text-blue-600 text-2xl font-black">➔</div>
+                <div className="text-xs font-black text-slate-800 uppercase tracking-wider space-y-1">
+                  <div>MATRIZ: LARGURA DO BALÃO</div>
+                  <div>CAMADA: CAMADA DO FILME</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1001</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1002</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1003</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1004</td><td className="px-2 py-2 border-r border-slate-200">600</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1005</td><td className="px-2 py-2 border-r border-slate-200">600</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1007</td><td className="px-2 py-2 border-r border-slate-200">175</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1008</td><td className="px-2 py-2 border-r border-slate-200">175</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1012</td><td className="px-2 py-2 border-r border-slate-200">175</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1031</td><td className="px-2 py-2 border-r border-slate-200">160</td><td className="px-2 py-2">5</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1010</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1013</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1015</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1017</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1016</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1018</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1019</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">9</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1020</td><td className="px-2 py-2 border-r border-slate-200">500</td><td className="px-2 py-2">7</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1032</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">5</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1033</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">7</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE OBSERVAÇÃO - ALOCAÇÃO */}
+      {isAlocacaoObsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 my-auto">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <span className="text-blue-600"><Icons.FileText /></span> Observação - Guia de Alocação
+              </h2>
+              <button onClick={() => setIsAlocacaoObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
+            </div>
+
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-xs font-black uppercase">
+                        <th className="px-4 py-3 border-r border-slate-300">Dia da Semana</th>
+                        <th className="px-4 py-3">Alocação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">SEGUNDA</td>
+                        <td className="px-4 py-2.5">QUI</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">TERÇA</td>
+                        <td className="px-4 py-2.5">SEX</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">QUARTA</td>
+                        <td className="px-4 py-2.5">SAB - DOM</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">QUINTA</td>
+                        <td className="px-4 py-2.5">SEG</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">SEXTA</td>
+                        <td className="px-4 py-2.5">TER - QUA</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-xs font-black uppercase">
+                        <th className="px-4 py-3 border-r border-slate-300 w-28 text-center">Cores</th>
+                        <th className="px-4 py-3">Tipo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#ff0000] text-white px-3 py-1 rounded-md font-black block shadow-sm">C</span>
+                        </td>
+                        <td className="px-4 py-2">CANCELADO</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#ff6600] text-white px-3 py-1 rounded-md font-black block shadow-sm">I</span>
+                        </td>
+                        <td className="px-4 py-2">48 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#1e6091] text-white px-3 py-1 rounded-md font-black block shadow-sm">U</span>
+                        </td>
+                        <td className="px-4 py-2">36 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#00a8e8] text-white px-3 py-1 rounded-md font-black block shadow-sm">ZA</span>
+                        </td>
+                        <td className="px-4 py-2">72 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#80b918] text-white px-3 py-1 rounded-md font-black block shadow-sm">A</span>
+                        </td>
+                        <td className="px-4 py-2">96 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#fde2e4] text-slate-800 px-3 py-1 rounded-md font-black block border border-pink-200 shadow-sm">R</span>
+                        </td>
+                        <td className="px-4 py-2">REIMPRESSÃO</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-white text-slate-800 px-3 py-1 rounded-md font-black block border border-slate-300 shadow-sm">T</span>
+                        </td>
+                        <td className="px-4 py-2">ZONA BRANCA</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-200/80 text-slate-700 text-xs font-black uppercase">
+                      <th className="px-4 py-3 border-r border-slate-300 w-64">Coluna e Cores</th>
+                      <th className="px-4 py-3">Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#a0aec0] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA E ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">AMOSTRA</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#90caf9] text-slate-900 px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">LOTE PILOTO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#ff0000] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">BLOQUEADO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#000000] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">OBSOLETO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#b7e4c7] text-slate-900 px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA</span>
+                      </td>
+                      <td className="px-4 py-2">REVISADO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#7c3aed] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">MÁQUINA</span>
+                      </td>
+                      <td className="px-4 py-2">SEM CADASTRO DE ACERTO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#a0aec0] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA</span>
+                      </td>
+                      <td className="px-4 py-2">PEDIDO VINDO DE AMOSTRA E NÃO PRECISA DE REVISÃO</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-200/80 text-slate-700 text-xs font-black uppercase">
+                      <th className="px-4 py-3 border-r border-slate-300 w-48 text-center">Organização dos Dias</th>
+                      <th className="px-4 py-3 text-center">Ordem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#fde2e4] text-slate-800 px-3 py-1 rounded-md font-black block border border-pink-200 shadow-sm">R</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">1</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#1e6091] text-white px-3 py-1 rounded-md font-black block shadow-sm">U</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">2</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#ff6600] text-white px-3 py-1 rounded-md font-black block shadow-sm">I</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">3</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#00a8e8] text-white px-3 py-1 rounded-md font-black block shadow-sm">ZA</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">4</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#80b918] text-white px-3 py-1 rounded-md font-black block shadow-sm">A</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">5</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ESTOQUE DE SEGURANÇA */}
+      {isSafetyStockOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <span className="text-blue-600"><Icons.Shield /></span> Estoque de Segurança
+              </h2>
+              
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleGenerateSafetyStockPDF} 
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase hover:bg-emerald-700 transition-all shadow-md active:scale-95"
+                  title="Gerar Relatório PDF em A4 Paisagem"
+                >
+                  <Icons.Printer />
+                  <span>Extrair PDF</span>
+                </button>
+                <button onClick={() => { setIsSafetyStockOpen(false); handleCancelEditSafetyStock(); }} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
+              </div>
+            </div>
+
+            <div className="p-8 space-y-6">
+              {!isReadOnly && (
+                <form onSubmit={handleAddOrUpdateSafetyStock} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 items-end">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Cliente</label>
+                    <input 
+                      type="text" 
+                      placeholder="Cliente" 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
+                      value={newSafetyItem.cliente}
+                      onChange={(e) => setNewSafetyItem({ ...newSafetyItem, cliente: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Item *</label>
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="Ex: TR1010" 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold uppercase text-xs"
+                      value={newSafetyItem.item}
+                      onChange={(e) => setNewSafetyItem({ ...newSafetyItem, item: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Quantidade</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      placeholder="Qtd" 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
+                      value={newSafetyItem.quantidade}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const qty = parsePtBrFloat(val);
+                        const est = parsePtBrFloat(newSafetyItem.estoque);
+                        const pend = Math.max(0, qty - est);
+                        setNewSafetyItem(prev => ({
+                          ...prev,
+                          quantidade: val,
+                          pendente: pend,
+                          status: pend === 0 ? 'Em Estoque' : 'Pendente'
+                        }));
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-blue-600 uppercase mb-1 font-bold">Estoque</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      placeholder="Estoque" 
+                      className="w-full px-3 py-2 bg-white border-2 border-blue-200 rounded-xl font-bold text-xs focus:border-blue-500 focus:outline-none"
+                      value={newSafetyItem.estoque}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const qty = parsePtBrFloat(newSafetyItem.quantidade);
+                        const est = parsePtBrFloat(val);
+                        const pend = Math.max(0, qty - est);
+                        setNewSafetyItem(prev => ({
+                          ...prev,
+                          estoque: val,
+                          pendente: pend,
+                          status: pend === 0 ? 'Em Estoque' : 'Pendente'
+                        }));
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-amber-600 uppercase mb-1 font-bold">Pendente</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      placeholder="Auto" 
+                      readOnly
+                      className="w-full px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl font-black text-xs text-amber-600 cursor-not-allowed tabular-nums"
+                      value={
+                        newSafetyItem.pendente !== '' && newSafetyItem.pendente !== undefined
+                          ? newSafetyItem.pendente
+                          : Math.max(0, parsePtBrFloat(newSafetyItem.quantidade) - parsePtBrFloat(newSafetyItem.estoque))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Data Disponib.</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: 20/08/2026" 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
+                      value={newSafetyItem.dataDisponibilidade}
+                      onChange={(e) => setNewSafetyItem({ ...newSafetyItem, dataDisponibilidade: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex gap-1">
+                    <button type="submit" className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wider hover:bg-blue-700 transition-all shadow-md">
+                      {editingSafetyId ? 'Salvar' : 'Adicionar'}
+                    </button>
+                    {editingSafetyId && (
+                      <button 
+                        type="button" 
+                        onClick={handleCancelEditSafetyStock}
+                        className="p-2.5 bg-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase hover:bg-slate-300 transition-all"
+                        title="Cancelar Edição"
+                      >
+                        <Icons.X />
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+
+              <div className="max-h-[380px] overflow-y-auto border border-slate-200 rounded-2xl">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400">Cliente</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400">Item</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Quantidade</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Estoque</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Pendente Produção</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Data Disponibilidade</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Status</th>
+                      {!isReadOnly && <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-right">Ação</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {safetyStocks.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" className="px-4 py-8 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">
+                          Nenhum registro de estoque de segurança definido.
+                        </td>
+                      </tr>
+                    ) : (
+                      safetyStocks.map(stock => {
+                        const isGreen = stock.status === 'Em Estoque';
+                        const isEditingThis = editingSafetyId === stock.id;
+                        return (
+                          <tr key={stock.id} className={`hover:bg-slate-50 transition-colors ${isEditingThis ? 'bg-blue-50/60' : ''}`}>
+                            <td className="px-4 py-3 font-bold text-slate-800 text-xs">{stock.cliente || '-'}</td>
+                            <td className="px-4 py-3 font-bold text-slate-800 text-xs">{stock.item}</td>
+                            <td className="px-4 py-3 text-center font-black text-slate-600 text-xs tabular-nums">{formatQty(stock.quantidade)} kg</td>
+                            <td className="px-4 py-3 text-center font-black text-emerald-600 text-xs tabular-nums">{formatQty(stock.estoque)} kg</td>
+                            <td className="px-4 py-3 text-center font-black text-amber-600 text-xs tabular-nums">{formatQty(stock.pendente)} kg</td>
+                            <td className="px-4 py-3 text-center font-bold text-slate-600 text-xs">{stock.dataDisponibilidade || '-'}</td>
+                            <td className="px-4 py-3 text-center">
+                              <button 
+                                onClick={() => toggleSafetyStockStatus(stock.id)}
+                                disabled={isReadOnly}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all ${isReadOnly ? 'cursor-not-allowed opacity-80' : 'active:scale-95'} ${isGreen ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-amber-400 text-slate-900 border-amber-500 shadow-sm'}`}
+                              >
+                                {isGreen ? <Icons.Check /> : <Icons.Pending />}
+                                <span>{stock.status}</span>
+                              </button>
+                            </td>
+                            {!isReadOnly && (
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button 
+                                    onClick={() => handleEditSafetyStock(stock)} 
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                    title="Editar Estoque"
+                                  >
+                                    <Icons.Edit />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteSafetyStock(stock.id)} 
+                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                    title="Remover"
+                                  >
+                                    <Icons.Trash />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PERSONALIZADO DE CONFIRMAÇÃO DE ELIMINAÇÃO */}
       {deleteTargetId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8 text-center animate-in zoom-in duration-200">
@@ -1053,313 +1776,6 @@ const App = () => {
             <div className="flex gap-3">
               <button onClick={() => setDeleteTargetId(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button>
               <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Sim, Eliminar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL ESTOQUE DE SEGURANÇA */}
-      {isSafetyStockOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in duration-200">
-            <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-              <div className="flex items-center gap-3">
-                <span className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Icons.Shield /></span>
-                <div>
-                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Estoque de Segurança</h2>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Gestão de Regras e Disponibilidade</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleGenerateSafetyStockPDF} 
-                  className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:bg-black transition-all shadow-md active:scale-95"
-                  title="Exportar Relatório em PDF"
-                >
-                  <Icons.Printer /> Imprimir PDF
-                </button>
-                <button onClick={() => setIsSafetyStockOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors">
-                  <Icons.X />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-8 overflow-y-auto space-y-8 flex-grow">
-              {!isReadOnly && (
-                <form onSubmit={handleAddOrUpdateSafetyStock} className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                      {editingSafetyId ? 'Editar Item de Estoque' : 'Adicionar Novo Item'}
-                    </span>
-                    {editingSafetyId && (
-                      <button type="button" onClick={handleCancelEditSafetyStock} className="text-xs font-black text-slate-400 hover:text-slate-600 uppercase">
-                        Cancelar Edição
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Cliente</label>
-                      <input 
-                        required 
-                        type="text" 
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20" 
-                        value={newSafetyItem.cliente} 
-                        onChange={(e) => setNewSafetyItem({...newSafetyItem, cliente: e.target.value})} 
-                        placeholder="Ex: CLIENTE ABC" 
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Item</label>
-                      <input 
-                        required 
-                        type="text" 
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20" 
-                        value={newSafetyItem.item} 
-                        onChange={(e) => setNewSafetyItem({...newSafetyItem, item: e.target.value})} 
-                        placeholder="Ex: PE-012" 
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Quantidade Necessária (kg)</label>
-                      <input 
-                        required 
-                        type="text" 
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20" 
-                        value={newSafetyItem.quantidade} 
-                        onChange={(e) => setNewSafetyItem({...newSafetyItem, quantidade: e.target.value})} 
-                        placeholder="Ex: 5000" 
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Estoque Atual (kg)</label>
-                      <input 
-                        type="text" 
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20" 
-                        value={newSafetyItem.estoque} 
-                        onChange={(e) => setNewSafetyItem({...newSafetyItem, estoque: e.target.value})} 
-                        placeholder="Ex: 2000" 
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Data Disponibilidade</label>
-                      <input 
-                        type="text" 
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20" 
-                        value={newSafetyItem.dataDisponibilidade} 
-                        onChange={(e) => setNewSafetyItem({...newSafetyItem, dataDisponibilidade: e.target.value})} 
-                        placeholder="Ex: 15/10/2026" 
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Status do Item</label>
-                      <select 
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        value={newSafetyItem.status}
-                        onChange={(e) => setNewSafetyItem({...newSafetyItem, status: e.target.value})}
-                      >
-                        <option value="Em Estoque">Em Estoque</option>
-                        <option value="Pendente">Pendente Produção</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-2">
-                    <button type="submit" className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase shadow-md transition-all">
-                      {editingSafetyId ? 'Atualizar Item' : 'Adicionar ao Estoque'}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* Tabela de Estoque de Segurança */}
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      <th className="px-4 py-3">Cliente</th>
-                      <th className="px-4 py-3">Item</th>
-                      <th className="px-4 py-3 text-center">Qtd. Necessária</th>
-                      <th className="px-4 py-3 text-center">Estoque Atual</th>
-                      <th className="px-4 py-3 text-center">Pendente Produção</th>
-                      <th className="px-4 py-3 text-center">Data Disp.</th>
-                      <th className="px-4 py-3 text-center">Status</th>
-                      {!isReadOnly && <th className="px-4 py-3 text-right">Ações</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs">
-                    {safetyStocks.length === 0 ? (
-                      <tr>
-                        <td colSpan={isReadOnly ? "7" : "8"} className="px-4 py-8 text-center text-slate-400 font-bold uppercase text-[10px]">
-                          Nenhum registro de estoque cadastrado.
-                        </td>
-                      </tr>
-                    ) : (
-                      safetyStocks.map(stock => (
-                        <tr key={stock.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3 font-bold text-slate-700 uppercase">{stock.cliente || '-'}</td>
-                          <td className="px-4 py-3 font-black text-slate-800 uppercase">{stock.item || '-'}</td>
-                          <td className="px-4 py-3 text-center font-bold text-slate-600 tabular-nums">{formatQty(stock.quantidade)} kg</td>
-                          <td className="px-4 py-3 text-center font-bold text-emerald-600 tabular-nums">{formatQty(stock.estoque)} kg</td>
-                          <td className="px-4 py-3 text-center font-bold text-amber-600 tabular-nums">{formatQty(stock.pendente)} kg</td>
-                          <td className="px-4 py-3 text-center font-bold text-slate-500">{stock.dataDisponibilidade || '-'}</td>
-                          <td className="px-4 py-3 text-center">
-                            <button 
-                              onClick={() => toggleSafetyStockStatus(stock.id)}
-                              disabled={isReadOnly}
-                              className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border transition-all ${stock.status === 'Em Estoque' ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-amber-500 text-white border-amber-600'}`}
-                            >
-                              {stock.status}
-                            </button>
-                          </td>
-                          {!isReadOnly && (
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex justify-end gap-1">
-                                <button onClick={() => handleEditSafetyStock(stock)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Icons.Edit /></button>
-                                <button onClick={() => handleDeleteSafetyStock(stock.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Icons.Trash /></button>
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAIS DE OBSERVAÇÃO */}
-      {/* 1. Modal Observação: Alocação */}
-      {isAlocacaoObsModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-              <div className="flex items-center gap-3">
-                <span className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Icons.FileText /></span>
-                <div>
-                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Observações de Alocação</h2>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Normas, Regras e Instruções do Sistema</span>
-                </div>
-              </div>
-              <button onClick={() => setIsAlocacaoObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors">
-                <Icons.X />
-              </button>
-            </div>
-
-            <div className="p-8 overflow-y-auto space-y-6 flex-grow text-slate-700 text-xs font-medium leading-relaxed">
-              <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5 space-y-3">
-                <h4 className="font-black text-blue-900 uppercase tracking-wider text-sm flex items-center gap-2">
-                  <Icons.Shield /> Regras Gerais de Alocação de Máquinas
-                </h4>
-                <ul className="list-disc pl-5 space-y-2 text-slate-600 font-bold">
-                  <li>Todos os itens numéricos de máquina sem prefixo serão convertidos automaticamente para <strong className="text-blue-700">EXT</strong> na importação.</li>
-                  <li>Inclusões e sequenciamento respeitam os aglutinamentos criados no módulo.</li>
-                  <li>Os pesos calculados levam em consideração automaticamente os acréscimos das perdas ativas.</li>
-                  <li>Certifique-se de salvar na nuvem periodicamente para evitar perda de alocações da sessão.</li>
-                </ul>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
-                <h4 className="font-black text-slate-800 uppercase tracking-wider text-xs">Instruções de Operação</h4>
-                <p>O Modo Leitura impede edições acidentais nas quantidades e sequenciamentos. Utilize o botão no cabeçalho para desbloquear edições.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Modal Observação: Matriz-Camadas */}
-      {isMatrizCamadasObsModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-              <div className="flex items-center gap-3">
-                <span className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Icons.Grid /></span>
-                <div>
-                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Matriz - Camadas</h2>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Tabela de Referência da Estrutura de Camadas</span>
-                </div>
-              </div>
-              <button onClick={() => setIsMatrizCamadasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors">
-                <Icons.X />
-              </button>
-            </div>
-
-            <div className="p-8 overflow-y-auto space-y-6 flex-grow">
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden">
-                <table className="w-full text-center border-collapse">
-                  <thead>
-                    <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase border-b border-slate-300">
-                      <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
-                      <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
-                      <th className="px-2 py-2.5">CAMADAS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT01</td><td className="px-2 py-2 border-r border-slate-200">120</td><td className="px-2 py-2">MONO</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT02</td><td className="px-2 py-2 border-r border-slate-200">120</td><td className="px-2 py-2">MONO</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT03</td><td className="px-2 py-2 border-r border-slate-200">120</td><td className="px-2 py-2">MONO</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT04</td><td className="px-2 py-2 border-r border-slate-200">140</td><td className="px-2 py-2">MONO</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT05</td><td className="px-2 py-2 border-r border-slate-200">120</td><td className="px-2 py-2">MONO</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT06</td><td className="px-2 py-2 border-r border-slate-200">150</td><td className="px-2 py-2">MONO</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT07</td><td className="px-2 py-2 border-r border-slate-200">150</td><td className="px-2 py-2">MONO</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT08</td><td className="px-2 py-2 border-r border-slate-200">200</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT09</td><td className="px-2 py-2 border-r border-slate-200">200</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT10</td><td className="px-2 py-2 border-r border-slate-200">200</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT11</td><td className="px-2 py-2 border-r border-slate-200">250</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT12</td><td className="px-2 py-2 border-r border-slate-200">200</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT13</td><td className="px-2 py-2 border-r border-slate-200">300</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT14</td><td className="px-2 py-2 border-r border-slate-200">300</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT15</td><td className="px-2 py-2 border-r border-slate-200">300</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT16</td><td className="px-2 py-2 border-r border-slate-200">250</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT17</td><td className="px-2 py-2 border-r border-slate-200">300</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT18</td><td className="px-2 py-2 border-r border-slate-200">300</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT19</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT20</td><td className="px-2 py-2 border-r border-slate-200">400</td><td className="px-2 py-2">COEX 3 CAMADAS (20/60/20)</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT21</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">COEX 5 CAMADAS</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT22</td><td className="px-2 py-2 border-r border-slate-200">200</td><td className="px-2 py-2">COEX 5 CAMADAS</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT23</td><td className="px-2 py-2 border-r border-slate-200">250</td><td className="px-2 py-2">COEX 5 CAMADAS</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT24</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">COEX 7 CAMADAS</td></tr>
-                    <tr><td className="px-2 py-2 border-r border-slate-200 font-black">EXT25</td><td className="px-2 py-2 border-r border-slate-200">400</td><td className="px-2 py-2">COEX 7 CAMADAS</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Modal Observação: Extrusoras */}
-      {isExtrusorasObsModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-            <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-              <div className="flex items-center gap-3">
-                <span className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Icons.Cpu /></span>
-                <div>
-                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Extrusoras</h2>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Capacidades e Especificações Técnicas</span>
-                </div>
-              </div>
-              <button onClick={() => setIsExtrusorasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors">
-                <Icons.X />
-              </button>
-            </div>
-
-            <div className="p-8 overflow-y-auto space-y-6 flex-grow text-slate-700 text-xs font-medium leading-relaxed">
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
-                <h4 className="font-black text-slate-800 uppercase tracking-wider text-xs">Informações do Módulo de Extrusoras</h4>
-                <p>Acompanhamento de capacidade produtiva das extrusoras ativas. Para detalhes e limites operacionais específicos por máquina, consulte a equipe de engenharia do PCP.</p>
-              </div>
             </div>
           </div>
         </div>

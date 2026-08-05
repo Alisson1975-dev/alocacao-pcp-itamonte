@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 // Definição manual de ícones SVG para garantir estabilidade e máxima velocidade
@@ -37,7 +37,7 @@ const Icons = {
   Loader2: ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
 };
 
-// --- CONFIGURAÇÃO FIREBASE REAL (PCP ITAMONTE) ---
+// Configuração Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCP0KtP6sL0M69wq3FpC5Tmq_IL9AtbnsY",
   authDomain: "pcp-juncao-itamonte.firebaseapp.com",
@@ -46,12 +46,12 @@ const firebaseConfig = {
   messagingSenderId: "827442336306",
   appId: "1:827442336306:web:653270dc35677b6273e22b"
 };
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'alocacao-mg1-pcp';
 
+// Função auxiliar para conversão de números em formato PT-BR
 const parsePtBrFloat = (val) => {
   if (val === null || val === undefined || val === '') return 0;
   if (typeof val === 'number') return val;
@@ -70,20 +70,27 @@ const App = () => {
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [history, setHistory] = useState([]);
   
+  // Estado para Menu Principal e Submenus
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isObsSubMenuOpen, setIsObsSubMenuOpen] = useState(false);
   
-  // Modais de Observações
+  // Estado para Páginas/Modais de Observações
   const [isAlocacaoObsModalOpen, setIsAlocacaoObsModalOpen] = useState(false);
   const [isMatrizCamadasObsModalOpen, setIsMatrizCamadasObsModalOpen] = useState(false);
   const [isExtrusorasObsModalOpen, setIsExtrusorasObsModalOpen] = useState(false);
 
-  // Modal de Estoque de Segurança
+  // Estado para Modal de Estoque de Segurança
   const [isSafetyStockOpen, setIsSafetyStockOpen] = useState(false);
   const [safetyStocks, setSafetyStocks] = useState([]);
   const [editingSafetyId, setEditingSafetyId] = useState(null);
   const [newSafetyItem, setNewSafetyItem] = useState({ 
-    cliente: '', item: '', quantidade: '', estoque: '', pendente: '', dataDisponibilidade: '', status: 'Em Estoque' 
+    cliente: '', 
+    item: '', 
+    quantidade: '', 
+    estoque: '', 
+    pendente: '', 
+    dataDisponibilidade: '', 
+    status: 'Em Estoque' 
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,29 +112,36 @@ const App = () => {
     quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente'
   });
 
+  // Autenticação Firebase e carregamento dos dados iniciais
   useEffect(() => {
     const initAuthAndLoad = async () => {
       try {
-        signInAnonymously(auth).catch(console.error);
-        const unsubscribe = onAuthStateChanged(auth, async (loggedUser) => {
-          setUser(loggedUser);
-          if (loggedUser) {
-            const stateDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'appState', 'snapshot');
-            const docSnap = await getDoc(stateDocRef);
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (data.allocations !== undefined) setAllocations(data.allocations);
-              if (data.lossValue !== undefined) setLossValue(data.lossValue);
-              if (data.safetyStocks !== undefined) setSafetyStocks(data.safetyStocks);
-            }
+        let loggedUser;
+        try {
+          const result = await signInAnonymously(auth);
+          loggedUser = result.user;
+        } catch (e) {
+          console.error("Auth error:", e);
+        }
+        setUser(loggedUser);
+
+        if (loggedUser) {
+          const stateDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'appState', 'snapshot');
+          const docSnap = await getDoc(stateDocRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.allocations !== undefined) setAllocations(data.allocations);
+            if (data.lossValue !== undefined) setLossValue(data.lossValue);
+            if (data.safetyStocks !== undefined) setSafetyStocks(data.safetyStocks);
           }
-        });
-        return unsubscribe;
+        }
       } catch (err) {
         console.error("Erro ao carregar dados iniciais do Firebase:", err);
       }
     };
     initAuthAndLoad();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
   }, []);
 
   const pushToHistory = useCallback((currentAllocations) => {
@@ -183,6 +197,7 @@ const App = () => {
     );
   }, [allocations, searchTerm]);
 
+  // Função para Salvar os dados no Firebase quando o utilizador clica em "Salvar"
   const handleSaveToCloud = async () => {
     if (!user) return;
     setIsSaving(true);
@@ -317,32 +332,30 @@ const App = () => {
       try {
         pushToHistory(allocations);
         const bstr = evt.target.result;
-        if (window.XLSX) {
-          const wb = window.XLSX.read(bstr, { type: 'binary' });
-          const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-          const headers = data[0].map(h => String(h).toUpperCase().trim());
-          const rows = data.slice(1);
-          const idx = {
-            maquina: Math.max(headers.indexOf('MÁQUINA'), headers.indexOf('MAQUINA')),
-            item: headers.indexOf('ITEM'),
-            itemFinal: Math.max(headers.indexOf('ITEM FINAL'), headers.indexOf('ITEMFINAL')),
-            descricao: Math.max(headers.indexOf('DESCRIÇÃO'), headers.indexOf('DESCRICAO')),
-            quantidade: headers.indexOf('QUANTIDADE'),
-            op: headers.indexOf('OP')
+        const wb = window.XLSX.read(bstr, { type: 'binary' });
+        const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+        const headers = data[0].map(h => String(h).toUpperCase().trim());
+        const rows = data.slice(1);
+        const idx = {
+          maquina: Math.max(headers.indexOf('MÁQUINA'), headers.indexOf('MAQUINA')),
+          item: headers.indexOf('ITEM'),
+          itemFinal: Math.max(headers.indexOf('ITEM FINAL'), headers.indexOf('ITEMFINAL')),
+          descricao: Math.max(headers.indexOf('DESCRIÇÃO'), headers.indexOf('DESCRICAO')),
+          quantidade: headers.indexOf('QUANTIDADE'),
+          op: headers.indexOf('OP')
+        };
+        const newItems = rows.filter(row => row.length > 0 && row[idx.maquina] !== undefined).map((row, index) => {
+          let maq = String(row[idx.maquina] || '').trim();
+          if (/^\d+$/.test(maq)) maq = `EXT${maq}`;
+          return {
+            id: Date.now() + index,
+            sequencia: '', maquina: maq, item: String(row[idx.item] || ''),
+            itemFinal: String(row[idx.itemFinal] || ''), descricao: String(row[idx.descricao] || ''),
+            quantidade: parseFloat(String(row[idx.quantidade] || 0).replace('.', '').replace(',', '.')) || 0,
+            ordemProducao: String(row[idx.op] || ''), perdaCount: 0, status: 'Pendente'
           };
-          const newItems = rows.filter(row => row.length > 0 && row[idx.maquina] !== undefined).map((row, index) => {
-            let maq = String(row[idx.maquina] || '').trim();
-            if (/^\d+$/.test(maq)) maq = `EXT${maq}`;
-            return {
-              id: Date.now() + index,
-              sequencia: '', maquina: maq, item: String(row[idx.item] || ''),
-              itemFinal: String(row[idx.itemFinal] || ''), descricao: String(row[idx.descricao] || ''),
-              quantidade: parseFloat(String(row[idx.quantidade] || 0).replace('.', '').replace(',', '.')) || 0,
-              ordemProducao: String(row[idx.op] || ''), perdaCount: 0, status: 'Pendente'
-            };
-          });
-          setAllocations(prev => [...prev, ...newItems]);
-        }
+        });
+        setAllocations(prev => [...prev, ...newItems]);
       } catch (err) { setCopyFeedback({ type: 'error', message: 'Erro na importação.' }); }
       finally { setIsImporting(false); e.target.value = null; }
     };
@@ -405,33 +418,69 @@ const App = () => {
 
     if (editingSafetyId) {
       setSafetyStocks(prev => prev.map(s => s.id === editingSafetyId ? {
-        ...s, cliente, item: itemCode, quantidade: qty, estoque: est, pendente: pend, dataDisponibilidade: dataDisp, status: statusVal
+        ...s,
+        cliente,
+        item: itemCode,
+        quantidade: qty,
+        estoque: est,
+        pendente: pend,
+        dataDisponibilidade: dataDisp,
+        status: statusVal
       } : s));
       setEditingSafetyId(null);
       setCopyFeedback({ type: 'success', message: 'Estoque de Segurança atualizado!' });
     } else {
       setSafetyStocks(prev => [
         ...prev,
-        { id: Date.now(), cliente, item: itemCode, quantidade: qty, estoque: est, pendente: pend, dataDisponibilidade: dataDisp, status: statusVal }
+        {
+          id: Date.now(),
+          cliente,
+          item: itemCode,
+          quantidade: qty,
+          estoque: est,
+          pendente: pend,
+          dataDisponibilidade: dataDisp,
+          status: statusVal
+        }
       ]);
       setCopyFeedback({ type: 'success', message: 'Estoque de Segurança adicionado!' });
     }
 
-    setNewSafetyItem({ cliente: '', item: '', quantidade: '', estoque: '', pendente: '', dataDisponibilidade: '', status: 'Em Estoque' });
+    setNewSafetyItem({ 
+      cliente: '', 
+      item: '', 
+      quantidade: '', 
+      estoque: '', 
+      pendente: '', 
+      dataDisponibilidade: '', 
+      status: 'Em Estoque' 
+    });
   };
 
   const handleEditSafetyStock = (stock) => {
     setEditingSafetyId(stock.id);
     setNewSafetyItem({
-      cliente: stock.cliente || '', item: stock.item || '', quantidade: stock.quantidade !== undefined ? String(stock.quantidade) : '',
-      estoque: stock.estoque !== undefined ? String(stock.estoque) : '', pendente: stock.pendente !== undefined ? String(stock.pendente) : '',
-      dataDisponibilidade: stock.dataDisponibilidade || '', status: stock.status || 'Em Estoque'
+      cliente: stock.cliente || '',
+      item: stock.item || '',
+      quantidade: stock.quantidade !== undefined ? String(stock.quantidade) : '',
+      estoque: stock.estoque !== undefined ? String(stock.estoque) : '',
+      pendente: stock.pendente !== undefined ? String(stock.pendente) : '',
+      dataDisponibilidade: stock.dataDisponibilidade || '',
+      status: stock.status || 'Em Estoque'
     });
   };
 
   const handleCancelEditSafetyStock = () => {
     setEditingSafetyId(null);
-    setNewSafetyItem({ cliente: '', item: '', quantidade: '', estoque: '', pendente: '', dataDisponibilidade: '', status: 'Em Estoque' });
+    setNewSafetyItem({ 
+      cliente: '', 
+      item: '', 
+      quantidade: '', 
+      estoque: '', 
+      pendente: '', 
+      dataDisponibilidade: '', 
+      status: 'Em Estoque' 
+    });
   };
 
   const toggleSafetyStockStatus = (id) => {
@@ -457,7 +506,11 @@ const App = () => {
       return;
     }
 
-    const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const today = new Date().toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
 
     const tableRowsHtml = safetyStocks.map(stock => {
       const isGreen = stock.status === 'Em Estoque';
@@ -487,16 +540,83 @@ const App = () => {
         <meta charset="UTF-8">
         <title>ESTOQUE DE SEGURANÇA - ${today}</title>
         <style>
-          @page { size: A4 landscape; margin: 12mm; }
-          * { box-sizing: border-box; }
-          body { font-family: system-ui, -apple-system, sans-serif; color: #0f172a; margin: 0; padding: 0; background: #ffffff; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #2563eb; padding-bottom: 14px; margin-bottom: 20px; }
-          .title { font-size: 22px; font-weight: 900; color: #1e293b; text-transform: uppercase; margin: 0; }
-          .subtitle { font-size: 11px; color: #64748b; margin-top: 4px; font-weight: 700; text-transform: uppercase; }
-          .date-badge { background: #f1f5f9; border: 1.5px solid #cbd5e1; padding: 8px 16px; border-radius: 12px; font-size: 11px; font-weight: 900; color: #1e293b; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-          th { background-color: #2563eb; color: #ffffff; font-size: 10px; font-weight: 900; text-transform: uppercase; padding: 10px; text-align: left; }
-          .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; font-weight: 800; text-transform: uppercase; }
+          @page {
+            size: A4 landscape;
+            margin: 12mm;
+          }
+          * {
+            box-sizing: border-box;
+          }
+          body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #0f172a;
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 14px;
+            margin-bottom: 20px;
+          }
+          .title {
+            font-size: 22px;
+            font-weight: 900;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0;
+          }
+          .subtitle {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 4px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .date-badge {
+            background: #f1f5f9;
+            border: 1.5px solid #cbd5e1;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 900;
+            color: #1e293b;
+            text-align: right;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          th {
+            background-color: #2563eb;
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px;
+            text-align: left;
+            border: none;
+          }
+          .footer {
+            margin-top: 24px;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #94a3b8;
+            font-weight: 800;
+            text-transform: uppercase;
+          }
         </style>
       </head>
       <body>
@@ -505,8 +625,11 @@ const App = () => {
             <h1 class="title">ESTOQUE DE SEGURANÇA</h1>
             <div class="subtitle">Relatório de Gestão - Alocação MG1 PCP</div>
           </div>
-          <div class="date-badge">DATA: ${today}</div>
+          <div class="date-badge">
+            DATA: ${today}
+          </div>
         </div>
+
         <table>
           <thead>
             <tr>
@@ -519,8 +642,11 @@ const App = () => {
               <th style="width: 12%; text-align: center;">Status</th>
             </tr>
           </thead>
-          <tbody>${tableRowsHtml}</tbody>
+          <tbody>
+            ${tableRowsHtml}
+          </tbody>
         </table>
+
         <div class="footer">
           <span>Relatório de Estoque de Segurança - PCP</span>
           <span>Página 1 de 1</span>
@@ -534,7 +660,26 @@ const App = () => {
       printWindow.document.write(printableHtml);
       printWindow.document.close();
       printWindow.focus();
-      setTimeout(() => { printWindow.print(); }, 300);
+      setTimeout(() => {
+        printWindow.print();
+      }, 300);
+    } else {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+      iframe.contentWindow.document.open();
+      iframe.contentWindow.document.write(printableHtml);
+      iframe.contentWindow.document.close();
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        document.body.removeChild(iframe);
+      }, 300);
     }
     setCopyFeedback({ type: 'success', message: 'Relatório PDF gerado com sucesso!' });
   }, [safetyStocks, formatQty]);
@@ -550,11 +695,16 @@ const App = () => {
 
       <input type="file" ref={fileInputRef} onChange={handleImportExcel} accept=".xlsx, .xls" className="hidden" />
 
+      {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm w-full">
         <div className="w-full px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3 w-full sm:w-auto justify-start">
             <div className="relative">
-              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2.5 text-slate-700 hover:text-blue-600 hover:bg-blue-50 bg-slate-50 border border-slate-200 rounded-2xl transition-all flex items-center justify-center shadow-sm active:scale-95">
+              <button 
+                onClick={() => setIsMenuOpen(!isMenuOpen)} 
+                className="p-2.5 text-slate-700 hover:text-blue-600 hover:bg-blue-50 bg-slate-50 border border-slate-200 rounded-2xl transition-all flex items-center justify-center shadow-sm active:scale-95"
+                title="Menu Principal"
+              >
                 <Icons.Menu />
               </button>
               
@@ -566,13 +716,22 @@ const App = () => {
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Menu do Sistema</span>
                     </div>
                     
-                    <button onClick={() => { setIsMenuOpen(false); setIsSafetyStockOpen(true); }} className="w-full px-4 py-3 text-left text-xs font-black uppercase text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 transition-colors">
+                    <button 
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsSafetyStockOpen(true);
+                      }}
+                      className="w-full px-4 py-3 text-left text-xs font-black uppercase text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 transition-colors"
+                    >
                       <span className="text-blue-600"><Icons.Shield /></span>
                       <span>Estoque de Segurança</span>
                     </button>
 
                     <div>
-                      <button onClick={() => setIsObsSubMenuOpen(!isObsSubMenuOpen)} className="w-full px-4 py-3 text-left text-xs font-black uppercase text-slate-700 hover:bg-slate-50 flex items-center justify-between transition-colors border-t border-slate-100">
+                      <button 
+                        onClick={() => setIsObsSubMenuOpen(!isObsSubMenuOpen)}
+                        className="w-full px-4 py-3 text-left text-xs font-black uppercase text-slate-700 hover:bg-slate-50 flex items-center justify-between transition-colors border-t border-slate-100"
+                      >
                         <div className="flex items-center gap-3">
                           <span className="text-slate-400"><Icons.FileText /></span>
                           <span>Observação</span>
@@ -584,17 +743,38 @@ const App = () => {
 
                       {isObsSubMenuOpen && (
                         <div className="bg-slate-50 py-1 pl-8 pr-2 border-y border-slate-100 flex flex-col gap-1">
-                          <button onClick={() => { setIsMenuOpen(false); setIsObsSubMenuOpen(false); setIsAlocacaoObsModalOpen(true); }} className="w-full px-3 py-2 text-left text-xs font-black uppercase text-blue-600 hover:bg-blue-100/50 rounded-xl flex items-center gap-2 transition-colors">
+                          <button 
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsObsSubMenuOpen(false);
+                              setIsAlocacaoObsModalOpen(true);
+                            }}
+                            className="w-full px-3 py-2 text-left text-xs font-black uppercase text-blue-600 hover:bg-blue-100/50 rounded-xl flex items-center gap-2 transition-colors"
+                          >
                             <span className="w-2 h-2 rounded-full bg-blue-600"></span>
                             <span>Alocação</span>
                           </button>
 
-                          <button onClick={() => { setIsMenuOpen(false); setIsObsSubMenuOpen(false); setIsMatrizCamadasObsModalOpen(true); }} className="w-full px-3 py-2 text-left text-xs font-black uppercase text-blue-600 hover:bg-blue-100/50 rounded-xl flex items-center gap-2 transition-colors">
+                          <button 
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsObsSubMenuOpen(false);
+                              setIsMatrizCamadasObsModalOpen(true);
+                            }}
+                            className="w-full px-3 py-2 text-left text-xs font-black uppercase text-blue-600 hover:bg-blue-100/50 rounded-xl flex items-center gap-2 transition-colors"
+                          >
                             <span className="w-2 h-2 rounded-full bg-blue-600"></span>
                             <span>Matriz-Camadas</span>
                           </button>
 
-                          <button onClick={() => { setIsMenuOpen(false); setIsObsSubMenuOpen(false); setIsExtrusorasObsModalOpen(true); }} className="w-full px-3 py-2 text-left text-xs font-black uppercase text-blue-600 hover:bg-blue-100/50 rounded-xl flex items-center gap-2 transition-colors">
+                          <button 
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsObsSubMenuOpen(false);
+                              setIsExtrusorasObsModalOpen(true);
+                            }}
+                            className="w-full px-3 py-2 text-left text-xs font-black uppercase text-blue-600 hover:bg-blue-100/50 rounded-xl flex items-center gap-2 transition-colors"
+                          >
                             <span className="w-2 h-2 rounded-full bg-blue-600"></span>
                             <span>Extrusoras</span>
                           </button>
@@ -602,7 +782,13 @@ const App = () => {
                       )}
                     </div>
 
-                    <button onClick={() => { setIsMenuOpen(false); setIsSettingsOpen(true); }} className="w-full px-4 py-3 text-left text-xs font-black uppercase text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors border-t border-slate-100">
+                    <button 
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsSettingsOpen(true);
+                      }}
+                      className="w-full px-4 py-3 text-left text-xs font-black uppercase text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors border-t border-slate-100"
+                    >
                       <span className="text-slate-400"><Icons.Settings /></span>
                       <span>Configurações</span>
                     </button>
@@ -615,7 +801,17 @@ const App = () => {
           </div>
           
           <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-end">
-            <button onClick={() => { setIsReadOnly(!isReadOnly); setCopyFeedback({ type: 'success', message: !isReadOnly ? 'Modo Leitura ativo!' : 'Modo Edição ativo!' }); }} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl border transition-all font-black text-xs uppercase tracking-wider shadow-md ${isReadOnly ? 'bg-amber-500 text-white border-amber-600 shadow-amber-100' : 'bg-slate-800 text-white border-slate-900'}`}>
+            <button 
+              onClick={() => {
+                setIsReadOnly(!isReadOnly);
+                setCopyFeedback({
+                  type: 'success',
+                  message: !isReadOnly ? 'Modo Leitura ativo!' : 'Modo Edição ativo!'
+                });
+              }} 
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl border transition-all font-black text-xs uppercase tracking-wider shadow-md ${isReadOnly ? 'bg-amber-500 text-white border-amber-600 shadow-amber-100' : 'bg-slate-800 text-white border-slate-900'}`}
+              title={isReadOnly ? "Mudar para Modo Edição" : "Mudar para Modo Leitura"}
+            >
               {isReadOnly ? <Icons.Lock /> : <Icons.Unlock />}
               <span>{isReadOnly ? "Modo Leitura" : "Modo Edição"}</span>
             </button>
@@ -627,7 +823,10 @@ const App = () => {
         </div>
       </header>
 
+      {/* Main Container */}
       <main className="w-full px-6 py-8 flex flex-col gap-6">
+        
+        {/* Painel de Indicadores */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center justify-between">
             <div>
@@ -656,7 +855,10 @@ const App = () => {
             </div>
             
             <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
-              <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${stats.percentage}%` }}></div>
+              <div 
+                className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
+                style={{ width: `${stats.percentage}%` }}
+              ></div>
             </div>
             <div className="flex justify-between items-center mt-2 text-[10px] font-black uppercase text-slate-400 tracking-wider">
               <span>{stats.checked} Conferidos</span>
@@ -665,6 +867,7 @@ const App = () => {
           </div>
         </section>
 
+        {/* Barra de Ferramentas */}
         <section className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 w-full">
           <div className="flex flex-col lg:flex-row gap-4 justify-between items-center">
             <div className="relative w-full lg:w-[450px]">
@@ -672,38 +875,68 @@ const App = () => {
               <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all text-sm font-medium" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-              <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(null); setFormData({ sequencia: '', maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente' }); setIsModalOpen(true); }} disabled={isReadOnly || allocations.length >= MAX_ROWS} className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 text-white rounded-2xl transition-all shadow-lg font-black text-xs uppercase tracking-widest ${isReadOnly ? 'bg-slate-400 cursor-not-allowed opacity-50 shadow-none' : 'bg-blue-600 hover:bg-blue-700'}`}>
+              <button 
+                onClick={() => { setIsQtyOnlyMode(false); setEditingId(null); setFormData({ sequencia: '', maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente' }); setIsModalOpen(true); }} 
+                disabled={isReadOnly || allocations.length >= MAX_ROWS} 
+                className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 text-white rounded-2xl transition-all shadow-lg font-black text-xs uppercase tracking-widest ${isReadOnly ? 'bg-slate-400 cursor-not-allowed opacity-50 shadow-none' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
                 <Icons.Plus /> Nova Alocação
               </button>
               
               <div className="flex gap-2">
-                <button onClick={handleUndo} disabled={isReadOnly || history.length === 0} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md ${isReadOnly || history.length === 0 ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-100'}`}>
+                <button 
+                  onClick={handleUndo} 
+                  disabled={isReadOnly || history.length === 0} 
+                  className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md ${isReadOnly || history.length === 0 ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-100'}`}
+                  title="Anular última ação (Ctrl + Z)"
+                >
                   <Icons.Undo /> Desfazer
                 </button>
-                <button onClick={handleSaveToCloud} disabled={isSaving || isReadOnly} className={`flex items-center gap-2 px-6 py-3 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg ${isReadOnly ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50 shadow-none' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-50'}`}>
+                <button 
+                  onClick={handleSaveToCloud} 
+                  disabled={isSaving || isReadOnly} 
+                  className={`flex items-center gap-2 px-6 py-3 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg ${isReadOnly ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50 shadow-none' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-50'}`}
+                >
                   {isSaving ? <Icons.Loader2 className="animate-spin" /> : <Icons.Save />}
                   <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
                 </button>
-                <button onClick={() => setIsClearModalOpen(true)} disabled={isReadOnly} className={`flex items-center gap-2 px-6 py-3 border rounded-2xl font-black text-xs uppercase transition-all shadow-md ${isReadOnly ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed shadow-none' : 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white shadow-red-50'}`}>
+                <button 
+                  onClick={() => setIsClearModalOpen(true)} 
+                  disabled={isReadOnly}
+                  className={`flex items-center gap-2 px-6 py-3 border rounded-2xl font-black text-xs uppercase transition-all shadow-md ${isReadOnly ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed shadow-none' : 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white shadow-red-50'}`}
+                >
                   <Icons.Trash /> Limpar
                 </button>
               </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
-            <button onClick={() => fileInputRef.current.click()} disabled={isImporting || isReadOnly} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black disabled:opacity-50'}`}>
+            <button 
+              onClick={() => fileInputRef.current.click()} 
+              disabled={isImporting || isReadOnly} 
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black disabled:opacity-50'}`}
+            >
               {isImporting ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Import />} Incluir
             </button>
-            <button onClick={handleSequenciar} disabled={isReadOnly} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-black'}`}>
+            <button 
+              onClick={handleSequenciar} 
+              disabled={isReadOnly}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-black'}`}
+            >
               <Icons.ListOrdered /> Sequenciar
             </button>
-            <button onClick={handleJuncao} disabled={isReadOnly} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-black'}`}>
+            <button 
+              onClick={handleJuncao} 
+              disabled={isReadOnly}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-black'}`}
+            >
               <Icons.Layers /> Junção
             </button>
             <button onClick={handleCopyData} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-black active:scale-95 transition-all"><Icons.Copy /> Copiar Dados</button>
           </div>
         </section>
 
+        {/* Tabela Principal */}
         <section className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col w-full">
           <div className="overflow-x-auto min-h-[300px] w-full">
             <table className="w-full text-left border-collapse table-fixed">
@@ -795,6 +1028,7 @@ const App = () => {
                         )}
                       </td>
 
+                      {/* CÉLULA DA COLUNA ESTOQUE DE SEGURANÇA */}
                       <td className="px-2 py-4 text-center">
                         {(() => {
                           const stockRules = safetyStocks.filter(s => s.item === String(item.item || '').trim().toUpperCase());
@@ -835,9 +1069,293 @@ const App = () => {
             </span>
           </div>
         </section>
-      </main>
+        </main>
+      {/* MODAL DE OBSERVAÇÃO - EXTRUSORAS */}
+      {isExtrusorasObsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 my-auto">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <span className="text-blue-600"><Icons.Cpu /></span> Observação - Extrusoras e Capacidade
+              </h2>
+              <button onClick={() => setIsExtrusorasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
+            </div>
 
-      {/* GUIA DE ALOCAÇÃO COM TABELAS DE CORES E DIAS */}
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                    Grupos de Máquinas & Centro de Produção
+                  </div>
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600 text-[10px] font-black uppercase border-b border-slate-200">
+                        <th className="px-4 py-2 border-r border-slate-200">GRUPO DE MAQUINAS</th>
+                        <th className="px-4 py-2">CENTRO DE PRODUÇÃO</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1001 - 1002 - 1003</td><td className="px-4 py-2 font-black text-blue-600">LISO</td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1004 - 1005</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1010 - 1013</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1015 - 1017</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1016 - 1018</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1019 - 1020</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1032 - 1031</td><td className="px-4 py-2"></td></tr>
+                      <tr className="bg-slate-100/80"><td className="px-4 py-2 border-r border-slate-200 font-black">1007 - 1008 -1012 -1031</td><td className="px-4 py-2 font-black text-emerald-600">FFS</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                    Capacidade de Produção Diária
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="sticky top-0 bg-slate-100 text-slate-600 text-[10px] font-black uppercase border-b border-slate-200">
+                        <tr>
+                          <th className="px-4 py-2 border-r border-slate-200">MAQUINA</th>
+                          <th className="px-4 py-2 text-right">PRODUÇÃO DIARIA – Kg/H</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1001</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1002</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1003</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1004</td><td className="px-4 py-1.5 text-right font-black tabular-nums">400</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1005</td><td className="px-4 py-1.5 text-right font-black tabular-nums">400</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1010</td><td className="px-4 py-1.5 text-right font-black tabular-nums">400</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1013</td><td className="px-4 py-1.5 text-right font-black tabular-nums">280</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1015</td><td className="px-4 py-1.5 text-right font-black tabular-nums">600</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1016</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1017</td><td className="px-4 py-1.5 text-right font-black tabular-nums">600</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1018</td><td className="px-4 py-1.5 text-right font-black tabular-nums">700</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1019</td><td className="px-4 py-1.5 text-right font-black tabular-nums">550</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1020</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1032</td><td className="px-4 py-1.5 text-right font-black tabular-nums">850</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1033</td><td className="px-4 py-1.5 text-right font-black tabular-nums">140</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1007</td><td className="px-4 py-1.5 text-right font-black tabular-nums">170</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1008</td><td className="px-4 py-1.5 text-right font-black tabular-nums">200</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1012</td><td className="px-4 py-1.5 text-right font-black tabular-nums">180</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1031</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                  Divisão de Especialistas
+                </div>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-red-200 shadow-sm">
+                    <div className="font-black text-red-600 text-sm w-28">CLEITON ➔</div>
+                    <div className="text-red-600 font-bold text-xs space-x-1">
+                      <span>1001,</span><span>1002,</span><span>1003,</span><span>1004,</span><span>1005,</span><span>1010,</span><span>1013</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-200 shadow-sm">
+                    <div className="text-emerald-600 font-bold text-xs space-x-1 flex-1">
+                      <span>1015,</span><span>1017,</span><span>1016,</span><span>1018,</span><span>1019,</span><span>1020,</span><span>1032,</span><span>1033</span>
+                    </div>
+                    <div className="font-black text-emerald-600 text-sm w-28 text-right">➔ BENEDITO</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                  Responsáveis pelas Máquinas
+                </div>
+                <table className="w-full text-center border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 text-xs font-black uppercase border-b border-slate-200">
+                      <th className="px-4 py-2.5 border-r border-slate-200 text-red-600">FABIANO</th>
+                      <th className="px-4 py-2.5 border-r border-slate-200 text-emerald-600">DANIEL</th>
+                      <th className="px-4 py-2.5 text-purple-600">RENATO</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-xs font-black">
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1001</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1015</td><td className="px-4 py-1.5 text-purple-600">1007</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1002</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1017</td><td className="px-4 py-1.5 text-purple-600">1008</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1003</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1016</td><td className="px-4 py-1.5 text-purple-600">1012</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1004</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1018</td><td className="px-4 py-1.5 text-purple-600">1031</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1005</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1019</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1010</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1020</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1013</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1032</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-slate-300">-</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1033</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE OBSERVAÇÃO - MATRIZ-CAMADAS */}
+      {isMatrizCamadasObsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-200 my-auto">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <span className="text-blue-600"><Icons.Grid /></span> Observação - Especificações Matriz e Camadas
+              </h2>
+              <button onClick={() => setIsMatrizCamadasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
+            </div>
+
+            <div className="p-8 space-y-6 max-h-[80vh] overflow-y-auto">
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
+                <div className="text-blue-600 text-2xl font-black">➔</div>
+                <div className="text-xs font-black text-slate-800 uppercase tracking-wider space-y-1">
+                  <div>MATRIZ: LARGURA DO BALÃO</div>
+                  <div>CAMADA: CAMADA DO FILME</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1001</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1002</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1003</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1004</td><td className="px-2 py-2 border-r border-slate-200">600</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1005</td><td className="px-2 py-2 border-r border-slate-200">600</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1007</td><td className="px-2 py-2 border-r border-slate-200">175</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1008</td><td className="px-2 py-2 border-r border-slate-200">175</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1012</td><td className="px-2 py-2 border-r border-slate-200">175</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1031</td><td className="px-2 py-2 border-r border-slate-200">160</td><td className="px-2 py-2">5</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1010</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1013</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1015</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1017</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1016</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1018</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1019</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">9</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1020</td><td className="px-2 py-2 border-r border-slate-200">500</td><td className="px-2 py-2">7</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1032</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">5</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1033</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">7</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE OBSERVAÇÃO - ALOCAÇÃO */}
       {isAlocacaoObsModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 my-auto">
@@ -849,6 +1367,7 @@ const App = () => {
             </div>
 
             <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto">
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                   <table className="w-full text-left border-collapse">
@@ -859,11 +1378,26 @@ const App = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">SEGUNDA</td><td className="px-4 py-2.5">QUI</td></tr>
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">TERÇA</td><td className="px-4 py-2.5">SEX</td></tr>
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">QUARTA</td><td className="px-4 py-2.5">SAB - DOM</td></tr>
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">QUINTA</td><td className="px-4 py-2.5">SEG</td></tr>
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">SEXTA</td><td className="px-4 py-2.5">TER - QUA</td></tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">SEGUNDA</td>
+                        <td className="px-4 py-2.5">QUI</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">TERÇA</td>
+                        <td className="px-4 py-2.5">SEX</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">QUARTA</td>
+                        <td className="px-4 py-2.5">SAB - DOM</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">QUINTA</td>
+                        <td className="px-4 py-2.5">SEG</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">SEXTA</td>
+                        <td className="px-4 py-2.5">TER - QUA</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -877,13 +1411,48 @@ const App = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
-                      <tr><td className="px-4 py-2 border-r border-slate-200 text-center"><span className="bg-[#ff0000] text-white px-3 py-1 rounded-md font-black block shadow-sm">C</span></td><td className="px-4 py-2">CANCELADO</td></tr>
-                      <tr><td className="px-4 py-2 border-r border-slate-200 text-center"><span className="bg-[#ff6600] text-white px-3 py-1 rounded-md font-black block shadow-sm">I</span></td><td className="px-4 py-2">48 HORAS</td></tr>
-                      <tr><td className="px-4 py-2 border-r border-slate-200 text-center"><span className="bg-[#1e6091] text-white px-3 py-1 rounded-md font-black block shadow-sm">U</span></td><td className="px-4 py-2">36 HORAS</td></tr>
-                      <tr><td className="px-4 py-2 border-r border-slate-200 text-center"><span className="bg-[#00a8e8] text-white px-3 py-1 rounded-md font-black block shadow-sm">ZA</span></td><td className="px-4 py-2">72 HORAS</td></tr>
-                      <tr><td className="px-4 py-2 border-r border-slate-200 text-center"><span className="bg-[#80b918] text-white px-3 py-1 rounded-md font-black block shadow-sm">A</span></td><td className="px-4 py-2">96 HORAS</td></tr>
-                      <tr><td className="px-4 py-2 border-r border-slate-200 text-center"><span className="bg-[#fde2e4] text-slate-800 px-3 py-1 rounded-md font-black block border border-pink-200 shadow-sm">R</span></td><td className="px-4 py-2">REIMPRESSÃO</td></tr>
-                      <tr><td className="px-4 py-2 border-r border-slate-200 text-center"><span className="bg-white text-slate-800 px-3 py-1 rounded-md font-black block border border-slate-300 shadow-sm">T</span></td><td className="px-4 py-2">ZONA BRANCA</td></tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#ff0000] text-white px-3 py-1 rounded-md font-black block shadow-sm">C</span>
+                        </td>
+                        <td className="px-4 py-2">CANCELADO</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#ff6600] text-white px-3 py-1 rounded-md font-black block shadow-sm">I</span>
+                        </td>
+                        <td className="px-4 py-2">48 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#1e6091] text-white px-3 py-1 rounded-md font-black block shadow-sm">U</span>
+                        </td>
+                        <td className="px-4 py-2">36 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#00a8e8] text-white px-3 py-1 rounded-md font-black block shadow-sm">ZA</span>
+                        </td>
+                        <td className="px-4 py-2">72 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#80b918] text-white px-3 py-1 rounded-md font-black block shadow-sm">A</span>
+                        </td>
+                        <td className="px-4 py-2">96 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#fde2e4] text-slate-800 px-3 py-1 rounded-md font-black block border border-pink-200 shadow-sm">R</span>
+                        </td>
+                        <td className="px-4 py-2">REIMPRESSÃO</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-white text-slate-800 px-3 py-1 rounded-md font-black block border border-slate-300 shadow-sm">T</span>
+                        </td>
+                        <td className="px-4 py-2">ZONA BRANCA</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -898,13 +1467,300 @@ const App = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
-                    <tr><td className="px-4 py-2 border-r border-slate-200"><span className="bg-[#a0aec0] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA E ITEM</span></td><td className="px-4 py-2">AMOSTRA</td></tr>
-                    <tr><td className="px-4 py-2 border-r border-slate-200"><span className="bg-[#90caf9] text-slate-900 px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span></td><td className="px-4 py-2">LOTE PILOTO</td></tr>
-                    <tr><td className="px-4 py-2 border-r border-slate-200"><span className="bg-[#ff0000] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span></td><td className="px-4 py-2">BLOQUEADO</td></tr>
-                    <tr><td className="px-4 py-2 border-r border-slate-200"><span className="bg-[#000000] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span></td><td className="px-4 py-2">OBSOLETO</td></tr>
-                    <tr><td className="px-4 py-2 border-r border-slate-200"><span className="bg-[#b7e4c7] text-slate-900 px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA</span></td><td className="px-4 py-2">REVISADO</td></tr>
-                    <tr><td className="px-4 py-2 border-r border-slate-200"><span className="bg-[#7c3aed] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">MÁQUINA</span></td><td className="px-4 py-2">SEM CADASTRO DE ACERTO</td></tr>
-                    <tr><td className="px-4 py-2 border-r border-slate-200"><span className="bg-[#a0aec0] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA</span></td><td className="px-4 py-2">PEDIDO VINDO DE AMOSTRA E NÃO PRECISA DE REVISÃO</td></tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#a0aec0] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA E ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">AMOSTRA</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#90caf9] text-slate-900 px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">LOTE PILOTO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#ff0000] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">BLOQUEADO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#000000] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">OBSOLETO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#b7e4c7] text-slate-900 px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA</span>
+                      </td>
+                      <td className="px-4 py-2">REVISADO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#7c3aed] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">MÁQUINA</span>
+                      </td>
+                      <td className="px-4 py-2">SEM CADASTRO DE ACERTO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#a0aec0] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA</span>
+                      </td>
+                      <td className="px-4 py-2">PEDIDO VINDO DE AMOSTRA E NÃO PRECISA DE REVISÃO</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-200/80 text-slate-700 text-xs font-black uppercase">
+                      <th className="px-4 py-3 border-r border-slate-300 w-48 text-center">Organização dos Dias</th>
+                      <th className="px-4 py-3 text-center">Ordem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#fde2e4] text-slate-800 px-3 py-1 rounded-md font-black block border border-pink-200 shadow-sm">R</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">1</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#1e6091] text-white px-3 py-1 rounded-md font-black block shadow-sm">U</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">2</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#ff6600] text-white px-3 py-1 rounded-md font-black block shadow-sm">I</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">3</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#00a8e8] text-white px-3 py-1 rounded-md font-black block shadow-sm">ZA</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">4</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#80b918] text-white px-3 py-1 rounded-md font-black block shadow-sm">A</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">5</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ESTOQUE DE SEGURANÇA */}
+      {isSafetyStockOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <span className="text-blue-600"><Icons.Shield /></span> Estoque de Segurança
+              </h2>
+              
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleGenerateSafetyStockPDF} 
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase hover:bg-emerald-700 transition-all shadow-md active:scale-95"
+                  title="Gerar Relatório PDF em A4 Paisagem"
+                >
+                  <Icons.Printer />
+                  <span>Extrair PDF</span>
+                </button>
+                <button onClick={() => { setIsSafetyStockOpen(false); handleCancelEditSafetyStock(); }} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
+              </div>
+            </div>
+
+            <div className="p-8 space-y-6">
+              {!isReadOnly && (
+                <form onSubmit={handleAddOrUpdateSafetyStock} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 items-end">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Cliente</label>
+                    <input 
+                      type="text" 
+                      placeholder="Cliente" 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
+                      value={newSafetyItem.cliente}
+                      onChange={(e) => setNewSafetyItem({ ...newSafetyItem, cliente: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Item *</label>
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="Ex: TR1010" 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold uppercase text-xs"
+                      value={newSafetyItem.item}
+                      onChange={(e) => setNewSafetyItem({ ...newSafetyItem, item: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Quantidade</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      placeholder="Qtd" 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
+                      value={newSafetyItem.quantidade}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const qty = parsePtBrFloat(val);
+                        const est = parsePtBrFloat(newSafetyItem.estoque);
+                        const pend = Math.max(0, qty - est);
+                        setNewSafetyItem(prev => ({
+                          ...prev,
+                          quantidade: val,
+                          pendente: pend,
+                          status: pend === 0 ? 'Em Estoque' : 'Pendente'
+                        }));
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-blue-600 uppercase mb-1 font-bold">Estoque</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      placeholder="Estoque" 
+                      className="w-full px-3 py-2 bg-white border-2 border-blue-200 rounded-xl font-bold text-xs focus:border-blue-500 focus:outline-none"
+                      value={newSafetyItem.estoque}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const qty = parsePtBrFloat(newSafetyItem.quantidade);
+                        const est = parsePtBrFloat(val);
+                        const pend = Math.max(0, qty - est);
+                        setNewSafetyItem(prev => ({
+                          ...prev,
+                          estoque: val,
+                          pendente: pend,
+                          status: pend === 0 ? 'Em Estoque' : 'Pendente'
+                        }));
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-amber-600 uppercase mb-1 font-bold">Pendente</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      placeholder="Auto" 
+                      readOnly
+                      className="w-full px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl font-black text-xs text-amber-600 cursor-not-allowed tabular-nums"
+                      value={
+                        newSafetyItem.pendente !== '' && newSafetyItem.pendente !== undefined
+                          ? newSafetyItem.pendente
+                          : Math.max(0, parsePtBrFloat(newSafetyItem.quantidade) - parsePtBrFloat(newSafetyItem.estoque))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Data Disponib.</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: 20/08/2026" 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
+                      value={newSafetyItem.dataDisponibilidade}
+                      onChange={(e) => setNewSafetyItem({ ...newSafetyItem, dataDisponibilidade: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex gap-1">
+                    <button type="submit" className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wider hover:bg-blue-700 transition-all shadow-md">
+                      {editingSafetyId ? 'Salvar' : 'Adicionar'}
+                    </button>
+                    {editingSafetyId && (
+                      <button 
+                        type="button" 
+                        onClick={handleCancelEditSafetyStock}
+                        className="p-2.5 bg-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase hover:bg-slate-300 transition-all"
+                        title="Cancelar Edição"
+                      >
+                        <Icons.X />
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+
+              <div className="max-h-[380px] overflow-y-auto border border-slate-200 rounded-2xl">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400">Cliente</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400">Item</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Quantidade</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Estoque</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Pendente Produção</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Data Disponibilidade</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-center">Status</th>
+                      {!isReadOnly && <th className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 text-right">Ação</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {safetyStocks.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" className="px-4 py-8 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">
+                          Nenhum registro de estoque de segurança definido.
+                        </td>
+                      </tr>
+                    ) : (
+                      safetyStocks.map(stock => {
+                        const isGreen = stock.status === 'Em Estoque';
+                        const isEditingThis = editingSafetyId === stock.id;
+                        return (
+                          <tr key={stock.id} className={`hover:bg-slate-50 transition-colors ${isEditingThis ? 'bg-blue-50/60' : ''}`}>
+                            <td className="px-4 py-3 font-bold text-slate-800 text-xs">{stock.cliente || '-'}</td>
+                            <td className="px-4 py-3 font-bold text-slate-800 text-xs">{stock.item}</td>
+                            <td className="px-4 py-3 text-center font-black text-slate-600 text-xs tabular-nums">{formatQty(stock.quantidade)} kg</td>
+                            <td className="px-4 py-3 text-center font-black text-emerald-600 text-xs tabular-nums">{formatQty(stock.estoque)} kg</td>
+                            <td className="px-4 py-3 text-center font-black text-amber-600 text-xs tabular-nums">{formatQty(stock.pendente)} kg</td>
+                            <td className="px-4 py-3 text-center font-bold text-slate-600 text-xs">{stock.dataDisponibilidade || '-'}</td>
+                            <td className="px-4 py-3 text-center">
+                              <button 
+                                onClick={() => toggleSafetyStockStatus(stock.id)}
+                                disabled={isReadOnly}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all ${isReadOnly ? 'cursor-not-allowed opacity-80' : 'active:scale-95'} ${isGreen ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-amber-400 text-slate-900 border-amber-500 shadow-sm'}`}
+                              >
+                                {isGreen ? <Icons.Check /> : <Icons.Pending />}
+                                <span>{stock.status}</span>
+                              </button>
+                            </td>
+                            {!isReadOnly && (
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button 
+                                    onClick={() => handleEditSafetyStock(stock)} 
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                    title="Editar Estoque"
+                                  >
+                                    <Icons.Edit />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteSafetyStock(stock.id)} 
+                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                    title="Remover"
+                                  >
+                                    <Icons.Trash />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -913,96 +1769,24 @@ const App = () => {
         </div>
       )}
 
-      {/* EXTRUSORAS */}
-      {isExtrusorasObsModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 my-auto">
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                <span className="text-blue-600"><Icons.Cpu /></span> Observação - Extrusoras e Capacidade
-              </h2>
-              <button onClick={() => setIsExtrusorasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
-            </div>
-            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                  <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">Grupos de Máquinas & Centro de Produção</div>
-                  <table className="w-full text-left border-collapse">
-                    <thead><tr className="bg-slate-100 text-slate-600 text-[10px] font-black uppercase border-b border-slate-200"><th className="px-4 py-2 border-r border-slate-200">GRUPO</th><th className="px-4 py-2">CENTRO</th></tr></thead>
-                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
-                      <tr><td className="px-4 py-2 border-r border-slate-200">1001 - 1002 - 1003</td><td className="px-4 py-2 font-black text-blue-600">LISO</td></tr>
-                      <tr className="bg-slate-100/80"><td className="px-4 py-2 border-r border-slate-200 font-black">1007 - 1008 -1012 -1031</td><td className="px-4 py-2 font-black text-emerald-600">FFS</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MATRIZ CAMADAS */}
-      {isMatrizCamadasObsModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-200 my-auto">
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2"><span className="text-blue-600"><Icons.Grid /></span> Observação - Especificações Matriz e Camadas</h2>
-              <button onClick={() => setIsMatrizCamadasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
-            </div>
-            <div className="p-8 space-y-6 max-h-[80vh] overflow-y-auto">
-              <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
-                <div className="text-blue-600 text-2xl font-black">➔</div>
-                <div className="text-xs font-black text-slate-800 uppercase tracking-wider space-y-1">
-                  <div>MATRIZ: LARGURA DO BALÃO</div>
-                  <div>CAMADA: CAMADA DO FILME</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ESTOQUE SEGURANÇA MODAL */}
-      {isSafetyStockOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200">
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2"><span className="text-blue-600"><Icons.Shield /></span> Estoque de Segurança</h2>
-              <div className="flex items-center gap-2">
-                <button onClick={handleGenerateSafetyStockPDF} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase hover:bg-emerald-700 transition-all shadow-md active:scale-95"><Icons.Printer /> Extrair PDF</button>
-                <button onClick={() => { setIsSafetyStockOpen(false); handleCancelEditSafetyStock(); }} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
-              </div>
-            </div>
-            <div className="p-8 space-y-6">
-              {!isReadOnly && (
-                <form onSubmit={handleAddOrUpdateSafetyStock} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 items-end">
-                  <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Cliente</label><input type="text" placeholder="Cliente" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs" value={newSafetyItem.cliente} onChange={(e) => setNewSafetyItem({ ...newSafetyItem, cliente: e.target.value })} /></div>
-                  <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Item *</label><input type="text" required placeholder="Ex: TR1010" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold uppercase text-xs" value={newSafetyItem.item} onChange={(e) => setNewSafetyItem({ ...newSafetyItem, item: e.target.value })} /></div>
-                  <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Quantidade</label><input type="number" step="0.01" placeholder="Qtd" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs" value={newSafetyItem.quantidade} onChange={(e) => { const val = e.target.value; const qty = parsePtBrFloat(val); const est = parsePtBrFloat(newSafetyItem.estoque); const pend = Math.max(0, qty - est); setNewSafetyItem(prev => ({ ...prev, quantidade: val, pendente: pend, status: pend === 0 ? 'Em Estoque' : 'Pendente' })); }} /></div>
-                  <div><label className="block text-[10px] font-black text-blue-600 uppercase mb-1 font-bold">Estoque</label><input type="number" step="0.01" placeholder="Estoque" className="w-full px-3 py-2 bg-white border-2 border-blue-200 rounded-xl font-bold text-xs focus:border-blue-500 focus:outline-none" value={newSafetyItem.estoque} onChange={(e) => { const val = e.target.value; const qty = parsePtBrFloat(newSafetyItem.quantidade); const est = parsePtBrFloat(val); const pend = Math.max(0, qty - est); setNewSafetyItem(prev => ({ ...prev, estoque: val, pendente: pend, status: pend === 0 ? 'Em Estoque' : 'Pendente' })); }} /></div>
-                  <div><label className="block text-[10px] font-black text-amber-600 uppercase mb-1 font-bold">Pendente</label><input type="number" step="0.01" placeholder="Auto" readOnly className="w-full px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl font-black text-xs text-amber-600 cursor-not-allowed tabular-nums" value={newSafetyItem.pendente !== '' && newSafetyItem.pendente !== undefined ? newSafetyItem.pendente : Math.max(0, parsePtBrFloat(newSafetyItem.quantidade) - parsePtBrFloat(newSafetyItem.estoque))} /></div>
-                  <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Data Disponib.</label><input type="text" placeholder="Ex: 20/08/2026" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-bold text-xs" value={newSafetyItem.dataDisponibilidade} onChange={(e) => setNewSafetyItem({ ...newSafetyItem, dataDisponibilidade: e.target.value })} /></div>
-                  <div className="flex gap-1"><button type="submit" className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wider hover:bg-blue-700 transition-all shadow-md">{editingSafetyId ? 'Salvar' : 'Adicionar'}</button></div>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CONFIRMAÇÃO DE DELETAR */}
+      {/* MODAL PERSONALIZADO DE CONFIRMAÇÃO DE ELIMINAÇÃO */}
       {deleteTargetId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8 text-center animate-in zoom-in duration-200">
-            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Trash /></div>
+            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Icons.Trash />
+            </div>
             <h2 className="text-xl font-black text-slate-800 uppercase mb-2">Eliminar Item?</h2>
             <p className="text-slate-500 text-sm font-medium mb-8">Esta ação irá apagar esta alocação de forma definitiva.</p>
-            <div className="flex gap-3"><button onClick={() => setDeleteTargetId(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button><button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Sim, Eliminar</button></div>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTargetId(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button>
+              <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Sim, Eliminar</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* AJUSTES */}
+      {/* Modal Ajustes */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8">
@@ -1015,19 +1799,19 @@ const App = () => {
         </div>
       )}
 
-      {/* LIMPAR */}
+      {/* Modal Confirmação Limpar */}
       {isClearModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8 text-center">
             <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Alert /></div>
             <h2 className="text-xl font-black text-slate-800 uppercase mb-2">Limpar Tudo?</h2>
-            <p className="text-slate-500 text-sm font-medium mb-8">Apagar todos os dados locais e também os salvos na nuvem?</p>
+            <p className="text-slate-500 text-sm font-medium mb-8">Apagar todos os dados locais e também os salvos na nuvem? Esta ação não pode ser desfeita.</p>
             <div className="flex gap-3"><button onClick={() => setIsClearModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button><button onClick={handleClearAll} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Sim, Limpar</button></div>
           </div>
         </div>
       )}
 
-      {/* MODAL EDITAR / NOVO */}
+      {/* Modal Cadastro/Edição */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-20">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in">

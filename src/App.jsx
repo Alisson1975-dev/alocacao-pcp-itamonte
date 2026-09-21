@@ -1,4 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+
+// Configuração atualizada do Firebase para o projeto PCP-Alocacao-Itamonte
+const firebaseConfig = {
+    apiKey: "AIzaSyDpU5eiP4szN8FKkVfd51wqISEuHuPq1zU",
+    authDomain: "pcp-alocacao-itamonte.firebaseapp.com",
+    projectId: "pcp-alocacao-itamonte",
+    storageBucket: "pcp-alocacao-itamonte.firebasestorage.app",
+    messagingSenderId: "376351536779",
+    appId: "1:376351536779:web:2c46c62d8b8a47f8c3468e"
+};
+
+// Inicialização do Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 const Icons = {
   Alert: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
@@ -24,28 +40,61 @@ export default function AlocacaoPCPMG1() {
     ordemProducao: ''
   });
 
-  const handleSave = (e) => {
-    e.preventDefault();
-    if (editingId) {
-      setAllocations(allocations.map(item => 
-        item.id === editingId ? { ...item, ...formData } : item
-      ));
-    } else {
-      const newItem = {
-        id: Date.now(),
-        ...formData
-      };
-      setAllocations([...allocations, newItem]);
+  // Carregar dados do Firestore ao iniciar
+  useEffect(() => {
+    fetchAllocations();
+  }, []);
+
+  const fetchAllocations = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "allocations"));
+      const items = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAllocations(items);
+    } catch (error) {
+      console.error("Erro ao carregar dados do Firebase:", error);
     }
-    setIsModalOpen(false);
-    setEditingId(null);
-    setFormData({ maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '' });
   };
 
-  const handleClearAll = () => {
-    setAllocations([]);
-    setIsClearModalOpen(false);
+  const handleSave = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingId) {
+        const docRef = doc(db, "allocations", String(editingId));
+        await updateDoc(docRef, formData);
+        setAllocations(allocations.map(item => 
+          item.id === editingId ? { ...item, ...formData } : item
+        ));
+      } else {
+        const docRef = await addDoc(collection(db, "allocations"), formData);
+        const newItem = {
+          id: docRef.id,
+          ...formData
+        };
+        setAllocations([...allocations, newItem]);
+      }
+      setIsModalOpen(false);
+      setEditingId(null);
+      setFormData({ maquina: '', item: '', itemFinal: '', descricao: '', quantidade: '', ordemProducao: '' });
+    } catch (error) {
+      console.error("Erro ao guardar dados:", error);
+    }
   };
+
+  const handleClearAll = async () => {
+    try {
+      for (let item of allocations) {
+        await deleteDoc(doc(db, "allocations", String(item.id)));
+      }
+      setAllocations([]);
+      setIsClearModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao limpar dados:", error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -139,6 +188,7 @@ export default function AlocacaoPCPMG1() {
         </div>
 
       </div>
+
       {/* Modal de Configurações */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">

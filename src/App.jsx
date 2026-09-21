@@ -1,14 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDpU5eiP4szN0FKkVfd51wqISEuHuPq1zU",
-  authDomain: "pcp-alocacao-itamonte.firebaseapp.com",
-  projectId: "pcp-alocacao-itamonte",
-  storageBucket: "pcp-alocacao-itamonte.firebasestorage.app",
-  messagingSenderId: "376351536779",
-  appId: "1:376351536779:web:2c46c62d8b8a47f8c3468e"
 };
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

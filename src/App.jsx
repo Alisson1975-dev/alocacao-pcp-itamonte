@@ -3,6 +3,18 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
+const firebaseConfig = {
+  apiKey: "AIzaSyDpU5eiP4szN0FKkVfd51wqISEuHuPq1zU",
+  authDomain: "pcp-alocacao-itamonte.firebaseapp.com",
+  projectId: "pcp-alocacao-itamonte",
+  storageBucket: "pcp-alocacao-itamonte.firebasestorage.app",
+  messagingSenderId: "376351536779",
+  appId: "1:376351536779:web:2c46c62d8b8a47f8c3468e"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 // Definição manual de ícones SVG para garantir estabilidade e máxima velocidade
 const Icons = {
   Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,

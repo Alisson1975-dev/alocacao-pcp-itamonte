@@ -1,10 +1,9 @@
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
-};
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+
+// Definição manual de ícones SVG para garantir estabilidade e máxima velocidade
 const Icons = {
   Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
   Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
@@ -32,59 +31,27 @@ const Icons = {
   FileText: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>,
   Printer: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>,
   ChevronRight: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>,
-  ChevronDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>,
-  ArrowLeft: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>,
   Grid: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>,
   Cpu: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="15" x2="23" y2="15"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="15" x2="4" y2="15"></line></svg>,
   CloudCheck: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 16.2A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 2 16h.5"></path><polyline points="9 16 12 19 18 13"></polyline></svg>,
   Loader2: ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
 };
 
-const formatExcelDate = (val) => {
-  if (!val && val !== 0) return '-';
-  if (typeof val === 'string' && (val.includes('/') || val.includes('-'))) return val;
-  const num = parseFloat(val);
-  if (isNaN(num) || num <= 0) return String(val || '-');
-  
-  const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-  const dateObj = new Date(excelEpoch.getTime() + num * 86400000);
-  const day = String(dateObj.getUTCDate()).padStart(2, '0');
-  const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
-  const year = dateObj.getUTCFullYear();
-  return `${day}/${month}/${year}`;
+// Configuração Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyCP0KtP6sL0M69wq3FpC5Tmq_IL9AtbnsY",
+  authDomain: "pcp-juncao-itamonte.firebaseapp.com",
+  projectId: "pcp-juncao-itamonte",
+  storageBucket: "pcp-juncao-itamonte.firebasestorage.app",
+  messagingSenderId: "827442336306",
+  appId: "1:827442336306:web:653270dc35677b6273e22b"
 };
-
-const formatExcelTime = (val) => {
-  if (!val && val !== 0) return '-';
-  if (typeof val === 'string' && val.includes(':')) return val;
-  const num = parseFloat(val);
-  if (isNaN(num)) return String(val || '-');
-  
-  const totalSeconds = Math.round(num * 86400);
-  const hours = String(Math.floor(totalSeconds / 3600) % 24).padStart(2, '0');
-  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
-  const seconds = String(totalSeconds % 60).padStart(2, '0');
-  return `${hours}:${minutes}:${seconds}`;
-};
-
-const findHeaderIndex = (headers, candidates) => {
-  for (const candidate of candidates) {
-    const candidateNorm = candidate.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-    const idx = headers.findIndex(h => {
-      const hNorm = String(h || '').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-      return hNorm === candidateNorm || hNorm.includes(candidateNorm);
-    });
-    if (idx !== -1) return idx;
-  }
-  return -1;
-};
-
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'alocacao-mg1-pcp';
+const appId = 'alocacao-mg1-pcp';
 
+// Função auxiliar para conversão de números em formato PT-BR
 const parsePtBrFloat = (val) => {
   if (val === null || val === undefined || val === '') return 0;
   if (typeof val === 'number') return val;
@@ -95,7 +62,7 @@ const parsePtBrFloat = (val) => {
   return parseFloat(str) || 0;
 };
 
-export default function App() {
+const App = () => {
   const [user, setUser] = useState(null);
   const [allocations, setAllocations] = useState([]);
   const [lossValue, setLossValue] = useState(200);
@@ -103,23 +70,16 @@ export default function App() {
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [history, setHistory] = useState([]);
   
-  const [excelStockRows, setExcelStockRows] = useState([]);
-  const [expandedRowId, setExpandedRowId] = useState(null);
-
+  // Estado para Menu Principal e Submenus
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isObsSubMenuOpen, setIsObsSubMenuOpen] = useState(false);
-  const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
-  const [importType, setImportType] = useState('alocacao'); 
-
+  
+  // Estado para Páginas/Modais de Observações
   const [isAlocacaoObsModalOpen, setIsAlocacaoObsModalOpen] = useState(false);
   const [isMatrizCamadasObsModalOpen, setIsMatrizCamadasObsModalOpen] = useState(false);
   const [isExtrusorasObsModalOpen, setIsExtrusorasObsModalOpen] = useState(false);
 
-  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
-  const [notes, setNotes] = useState([]);
-  const [activeNoteId, setActiveNoteId] = useState(null);
-  const [currentNote, setCurrentNote] = useState({ title: '', content: '' });
-
+  // Estado para Modal de Estoque de Segurança
   const [isSafetyStockOpen, setIsSafetyStockOpen] = useState(false);
   const [safetyStocks, setSafetyStocks] = useState([]);
   const [editingSafetyId, setEditingSafetyId] = useState(null);
@@ -152,16 +112,16 @@ export default function App() {
     quantidade: '', ordemProducao: '', perdaCount: 0, status: 'Pendente'
   });
 
+  // Autenticação Firebase e carregamento dos dados iniciais
   useEffect(() => {
     const initAuthAndLoad = async () => {
       try {
         let loggedUser;
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          const result = await signInWithCustomToken(auth, __initial_auth_token);
-          loggedUser = result.user;
-        } else {
+        try {
           const result = await signInAnonymously(auth);
           loggedUser = result.user;
+        } catch (e) {
+          console.error("Auth error:", e);
         }
         setUser(loggedUser);
 
@@ -173,12 +133,10 @@ export default function App() {
             if (data.allocations !== undefined) setAllocations(data.allocations);
             if (data.lossValue !== undefined) setLossValue(data.lossValue);
             if (data.safetyStocks !== undefined) setSafetyStocks(data.safetyStocks);
-            if (data.notes !== undefined) setNotes(data.notes);
-            if (data.excelStockRows !== undefined) setExcelStockRows(data.excelStockRows);
           }
         }
       } catch (err) {
-        console.error("Erro ao carregar dados do Firebase:", err);
+        console.error("Erro ao carregar dados iniciais do Firebase:", err);
       }
     };
     initAuthAndLoad();
@@ -196,7 +154,7 @@ export default function App() {
 
   const handleUndo = useCallback(() => {
     if (isReadOnly) {
-      setCopyFeedback({ type: 'error', message: 'Desative o Modo Leitura para anular.' });
+      setCopyFeedback({ type: 'error', message: 'Desative o Modo Leitura para anular ações.' });
       return;
     }
     if (history.length === 0) {
@@ -239,6 +197,7 @@ export default function App() {
     );
   }, [allocations, searchTerm]);
 
+  // Função para Salvar os dados no Firebase quando o utilizador clica em "Salvar"
   const handleSaveToCloud = async () => {
     if (!user) return;
     setIsSaving(true);
@@ -248,14 +207,12 @@ export default function App() {
         allocations,
         lossValue,
         safetyStocks,
-        notes,
-        excelStockRows,
         updatedAt: Date.now()
       });
-      setCopyFeedback({ type: 'success', message: 'Sincronizado no Firebase!' });
+      setCopyFeedback({ type: 'success', message: 'Sincronizado e salvo no Firebase!' });
     } catch (err) {
       console.error("Erro ao salvar:", err);
-      setCopyFeedback({ type: 'error', message: 'Erro ao salvar.' });
+      setCopyFeedback({ type: 'error', message: 'Erro ao salvar no Firebase.' });
     } finally {
       setIsSaving(false);
     }
@@ -311,7 +268,7 @@ export default function App() {
         : (item.itemFinal || '');
       return `${item.maquina || ''}\t${item.item || ''}\t${itemFinalDisplay}\t${item.descricao || ''}\t${formatQty(item.quantidade)}\t${item.ordemProducao || ''}`;
     }).join('\n');
-    copyToClipboard(header + rows, 'Dados copiados!');
+    copyToClipboard(header + rows, 'Dados completos copiados!');
   }, [allocations, formatQty, copyToClipboard]);
 
   const handleSequenciar = () => {
@@ -357,21 +314,12 @@ export default function App() {
     pushToHistory(allocations);
     setAllocations([]);
     setSafetyStocks([]);
-    setExcelStockRows([]);
     if (user) {
       const stateDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'appState', 'snapshot');
       await deleteDoc(stateDocRef);
     }
     setIsClearModalOpen(false);
-    setCopyFeedback({ type: 'success', message: 'Tudo limpo.' });
-  };
-
-  const triggerFileInput = (type) => {
-    setImportType(type);
-    setIsImportMenuOpen(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+    setCopyFeedback({ type: 'success', message: 'Tudo limpo no Firebase.' });
   };
 
   const handleImportExcel = (e) => {
@@ -382,86 +330,34 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
+        pushToHistory(allocations);
         const bstr = evt.target.result;
         const wb = window.XLSX.read(bstr, { type: 'binary' });
         const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-        if (data.length < 2) return;
-
         const headers = data[0].map(h => String(h).toUpperCase().trim());
         const rows = data.slice(1);
-
-        if (importType === 'alocacao') {
-          pushToHistory(allocations);
-          const idx = {
-            maquina: findHeaderIndex(headers, ['MÁQUINA', 'MAQUINA', 'EQUIPAMENTO', 'EXTRUSORA']),
-            item: findHeaderIndex(headers, ['ITEM', 'PRODUTO', 'CÓDIGO', 'CODIGO']),
-            itemFinal: findHeaderIndex(headers, ['ITEM FINAL', 'ITEMFINAL', 'PRODUTO FINAL']),
-            descricao: findHeaderIndex(headers, ['DESCRIÇÃO', 'DESCRICAO', 'DESC']),
-            quantidade: findHeaderIndex(headers, ['QUANTIDADE', 'QTD', 'PESO']),
-            op: findHeaderIndex(headers, ['OP', 'ORDEM', 'ORDEM PRODUCAO', 'ORDEM DE PRODUÇÃO'])
+        const idx = {
+          maquina: Math.max(headers.indexOf('MÁQUINA'), headers.indexOf('MAQUINA')),
+          item: headers.indexOf('ITEM'),
+          itemFinal: Math.max(headers.indexOf('ITEM FINAL'), headers.indexOf('ITEMFINAL')),
+          descricao: Math.max(headers.indexOf('DESCRIÇÃO'), headers.indexOf('DESCRICAO')),
+          quantidade: headers.indexOf('QUANTIDADE'),
+          op: headers.indexOf('OP')
+        };
+        const newItems = rows.filter(row => row.length > 0 && row[idx.maquina] !== undefined).map((row, index) => {
+          let maq = String(row[idx.maquina] || '').trim();
+          if (/^\d+$/.test(maq)) maq = `EXT${maq}`;
+          return {
+            id: Date.now() + index,
+            sequencia: '', maquina: maq, item: String(row[idx.item] || ''),
+            itemFinal: String(row[idx.itemFinal] || ''), descricao: String(row[idx.descricao] || ''),
+            quantidade: parseFloat(String(row[idx.quantidade] || 0).replace('.', '').replace(',', '.')) || 0,
+            ordemProducao: String(row[idx.op] || ''), perdaCount: 0, status: 'Pendente'
           };
-          const newItems = rows.filter(row => row.length > 0 && row[idx.maquina] !== undefined).map((row, index) => {
-            let maq = String(row[idx.maquina] || '').trim();
-            if (/^\d+$/.test(maq)) maq = `EXT${maq}`;
-            return {
-              id: Date.now() + index,
-              sequencia: '', maquina: maq, item: String(row[idx.item] || ''),
-              itemFinal: String(row[idx.itemFinal] || ''), descricao: String(row[idx.descricao] || ''),
-              quantidade: parseFloat(String(row[idx.quantidade] || 0).replace('.', '').replace(',', '.')) || 0,
-              ordemProducao: String(row[idx.op] || ''), perdaCount: 0, status: 'Pendente'
-            };
-          });
-          setAllocations(prev => [...prev, ...newItems]);
-          setCopyFeedback({ type: 'success', message: 'Alocações importadas!' });
-        } else if (importType === 'estoque') {
-          const idxMap = {
-            tipoDeposito: findHeaderIndex(headers, ['TIPO DE DEPÓSITO', 'TIPO DE DEPOSITO', 'DEPÓSITO', 'DEPOSITO', 'TIPO DEP']),
-            produto: findHeaderIndex(headers, ['PRODUTO', 'ITEM', 'CÓDIGO', 'CODIGO', 'MATERIAL']),
-            unidadeComercial: findHeaderIndex(headers, ['UNIDADE COMERCIAL', 'UN. COMERCIAL', 'CLIENTE', 'UNIDADE']),
-            posicaoDeposito: findHeaderIndex(headers, ['POSIÇÃO NO DEPÓSITO', 'POSICAO NO DEPOSITO', 'POSIÇÃO', 'POSICAO', 'ENDEREÇO', 'ENDERECO']),
-            quantidade: findHeaderIndex(headers, ['QUANTIDADE', 'QTD', 'SALDO']),
-            umBasica: findHeaderIndex(headers, ['UM BÁSICA', 'UM BASICA', 'UM', 'UNIDADE DE MEDIDA']),
-            lote: findHeaderIndex(headers, ['LOTE', 'BATCH']),
-            denominacaoEstoque: findHeaderIndex(headers, ['DENOMINAÇÃO DO TIPO DE ESTOQUE', 'DENOMINACAO DO TIPO DE ESTOQUE', 'TIPO DE ESTOQUE', 'TIPO ESTOQUE']),
-            descricao: findHeaderIndex(headers, ['DESCRIÇÃO BREVE DO PRODUTO', 'DESCRICAO BREVE DO PRODUTO', 'DESCRIÇÃO', 'DESCRICAO']),
-            dataEm: findHeaderIndex(headers, ['DATA EM', 'DATA ENTRADA', 'DT.EM']),
-            tipoIdVerificacao: findHeaderIndex(headers, ['TIPO ID VERIFICAÇÃO', 'TIPO ID VERIFICACAO', 'TIPO ID', 'TIPO VERIFICACAO']),
-            contrQualid: findHeaderIndex(headers, ['CONTR.QUALID.', 'CONTR.QUALID', 'CONTROLE QUALIDADE', 'CQ']),
-            hrEntrMercadorias: findHeaderIndex(headers, ['HR.ENTR.MERCADORIAS', 'HR ENTR MERCADORIAS', 'HORA ENTRADA', 'HORA']),
-            dataVencimento: findHeaderIndex(headers, ['DATA DO VENCIMENTO', 'DATA VENCIMENTO', 'VENCIMENTO', 'VALIDADE'])
-          };
-
-          const rawImportedRows = rows.filter(row => row.length > 0 && row[idxMap.produto] !== undefined).map((row, index) => {
-            const prodCode = String(row[idxMap.produto] || '').trim().toUpperCase();
-            return {
-              id: Date.now() + index,
-              tipoDeposito: idxMap.tipoDeposito !== -1 ? String(row[idxMap.tipoDeposito] || '-') : '-',
-              produto: prodCode,
-              unidadeComercial: idxMap.unidadeComercial !== -1 ? String(row[idxMap.unidadeComercial] || '-') : '-',
-              posicaoDeposito: idxMap.posicaoDeposito !== -1 ? String(row[idxMap.posicaoDeposito] || '-') : '-',
-              quantidade: idxMap.quantidade !== -1 ? parsePtBrFloat(row[idxMap.quantidade]) : 0,
-              umBasica: idxMap.umBasica !== -1 ? String(row[idxMap.umBasica] || 'KG') : 'KG',
-              lote: idxMap.lote !== -1 ? String(row[idxMap.lote] || '-') : '-',
-              denominacaoEstoque: idxMap.denominacaoEstoque !== -1 ? String(row[idxMap.denominacaoEstoque] || '-') : '-',
-              descricao: idxMap.descricao !== -1 ? String(row[idxMap.descricao] || '-') : '-',
-              dataEm: idxMap.dataEm !== -1 && row[idxMap.dataEm] !== undefined ? row[idxMap.dataEm] : '-',
-              tipoIdVerificacao: idxMap.tipoIdVerificacao !== -1 ? String(row[idxMap.tipoIdVerificacao] || '-') : '-',
-              contrQualid: idxMap.contrQualid !== -1 ? String(row[idxMap.contrQualid] || '-') : '-',
-              hrEntrMercadorias: idxMap.hrEntrMercadorias !== -1 && row[idxMap.hrEntrMercadorias] !== undefined ? row[idxMap.hrEntrMercadorias] : '-',
-              dataVencimento: idxMap.dataVencimento !== -1 && row[idxMap.dataVencimento] !== undefined ? row[idxMap.dataVencimento] : '-'
-            };
-          });
-
-          setExcelStockRows(rawImportedRows);
-          setCopyFeedback({ type: 'success', message: 'Base de Estoque do Excel importada com sucesso!' });
-        }
-      } catch (err) { 
-        console.error("Erro na importação Excel:", err);
-        setCopyFeedback({ type: 'error', message: 'Erro na importação.' }); 
-      } finally { 
-        setIsImporting(false); 
-        e.target.value = null; 
-      }
+        });
+        setAllocations(prev => [...prev, ...newItems]);
+      } catch (err) { setCopyFeedback({ type: 'error', message: 'Erro na importação.' }); }
+      finally { setIsImporting(false); e.target.value = null; }
     };
     reader.readAsBinaryString(file);
   };
@@ -505,39 +401,7 @@ export default function App() {
     pushToHistory(allocations);
     setAllocations(prev => prev.filter(a => a.id !== deleteTargetId));
     setDeleteTargetId(null);
-    setCopyFeedback({ type: 'success', message: 'Item eliminado.' });
-  };
-
-  const handleSaveNote = () => {
-    if (!currentNote.title.trim()) return;
-    if (activeNoteId) {
-      setNotes(prev => prev.map(n => n.id === activeNoteId ? { ...currentNote, id: activeNoteId, updatedAt: Date.now() } : n));
-      setCopyFeedback({ type: 'success', message: 'Nota atualizada!' });
-    } else {
-      const newId = Date.now();
-      const newN = { ...currentNote, id: newId, updatedAt: newId };
-      setNotes(prev => [newN, ...prev]);
-      setActiveNoteId(newId);
-      setCopyFeedback({ type: 'success', message: 'Nota criada!' });
-    }
-  };
-
-  const handleNewNote = () => {
-    setActiveNoteId(null);
-    setCurrentNote({ title: '', content: '' });
-  };
-
-  const handleDeleteNote = (id) => {
-    setNotes(prev => prev.filter(n => n.id !== id));
-    if (activeNoteId === id) {
-      handleNewNote();
-    }
-    setCopyFeedback({ type: 'success', message: 'Nota eliminada!' });
-  };
-
-  const handleSelectNote = (note) => {
-    setActiveNoteId(note.id);
-    setCurrentNote({ title: note.title, content: note.content });
+    setCopyFeedback({ type: 'success', message: 'Alocação eliminada.' });
   };
 
   const handleAddOrUpdateSafetyStock = (e) => {
@@ -638,12 +502,14 @@ export default function App() {
 
   const handleGenerateSafetyStockPDF = useCallback(() => {
     if (safetyStocks.length === 0) {
-      setCopyFeedback({ type: 'error', message: 'Nenhum registro para exportar.' });
+      setCopyFeedback({ type: 'error', message: 'Nenhum registro no Estoque de Segurança para exportar.' });
       return;
     }
 
     const today = new Date().toLocaleDateString('pt-BR', {
-      day: '2-digit', month: '2-digit', year: 'numeric'
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
     });
 
     const tableRowsHtml = safetyStocks.map(stock => {
@@ -674,26 +540,96 @@ export default function App() {
         <meta charset="UTF-8">
         <title>ESTOQUE DE SEGURANÇA - ${today}</title>
         <style>
-          @page { size: A4 landscape; margin: 12mm; }
-          * { box-sizing: border-box; }
-          body { font-family: system-ui, -apple-system, sans-serif; color: #0f172a; margin: 0; padding: 0; background: #ffffff; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #2563eb; padding-bottom: 14px; margin-bottom: 20px; }
-          .title { font-size: 22px; font-weight: 900; color: #1e293b; text-transform: uppercase; margin: 0; }
-          .subtitle { font-size: 11px; color: #64748b; margin-top: 4px; font-weight: 700; text-transform: uppercase; }
-          .date-badge { background: #f1f5f9; border: 1.5px solid #cbd5e1; padding: 8px 16px; border-radius: 12px; font-size: 11px; font-weight: 900; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-          th { background-color: #2563eb; color: #ffffff; font-size: 10px; font-weight: 900; text-transform: uppercase; padding: 10px; text-align: left; }
-          .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; display: flex; justify-between; font-size: 9px; color: #94a3b8; font-weight: 800; }
+          @page {
+            size: A4 landscape;
+            margin: 12mm;
+          }
+          * {
+            box-sizing: border-box;
+          }
+          body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #0f172a;
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 14px;
+            margin-bottom: 20px;
+          }
+          .title {
+            font-size: 22px;
+            font-weight: 900;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0;
+          }
+          .subtitle {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 4px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .date-badge {
+            background: #f1f5f9;
+            border: 1.5px solid #cbd5e1;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 900;
+            color: #1e293b;
+            text-align: right;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          th {
+            background-color: #2563eb;
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px;
+            text-align: left;
+            border: none;
+          }
+          .footer {
+            margin-top: 24px;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #94a3b8;
+            font-weight: 800;
+            text-transform: uppercase;
+          }
         </style>
       </head>
       <body>
         <div class="header">
           <div>
             <h1 class="title">ESTOQUE DE SEGURANÇA</h1>
-            <div class="subtitle">Relatório de gestão - PCP MG1</div>
+            <div class="subtitle">Relatório de Gestão - Alocação MG1 PCP</div>
           </div>
-          <div class="date-badge">DATA: ${today}</div>
+          <div class="date-badge">
+            DATA: ${today}
+          </div>
         </div>
+
         <table>
           <thead>
             <tr>
@@ -706,8 +642,11 @@ export default function App() {
               <th style="width: 12%; text-align: center;">Status</th>
             </tr>
           </thead>
-          <tbody>${tableRowsHtml}</tbody>
+          <tbody>
+            ${tableRowsHtml}
+          </tbody>
         </table>
+
         <div class="footer">
           <span>Relatório de Estoque de Segurança - PCP</span>
           <span>Página 1 de 1</span>
@@ -716,37 +655,39 @@ export default function App() {
       </html>
     `;
 
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-
-    const frameDoc = iframe.contentWindow.document;
-    frameDoc.open();
-    frameDoc.write(printableHtml);
-    frameDoc.close();
-
-    setTimeout(() => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printableHtml);
+      printWindow.document.close();
+      printWindow.focus();
       setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 1000);
-    }, 300);
-
-    setCopyFeedback({ type: 'success', message: 'PDF gerado com sucesso!' });
+        printWindow.print();
+      }, 300);
+    } else {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+      iframe.contentWindow.document.open();
+      iframe.contentWindow.document.write(printableHtml);
+      iframe.contentWindow.document.close();
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        document.body.removeChild(iframe);
+      }, 300);
+    }
+    setCopyFeedback({ type: 'success', message: 'Relatório PDF gerado com sucesso!' });
   }, [safetyStocks, formatQty]);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20 w-full">
       {copyFeedback && (
-        <div className={`fixed top-4 right-4 z-[150] px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-right duration-300 ${copyFeedback.type === 'success' ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-red-500 text-white border-red-400'}`}>
+        <div className={`fixed top-4 right-4 z-[100] px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-right duration-300 ${copyFeedback.type === 'success' ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-red-500 text-white border-red-400'}`}>
           {copyFeedback.type === 'success' ? <Icons.Check /> : <Icons.Alert />}
           <span className="font-bold text-sm uppercase tracking-wider">{copyFeedback.message}</span>
         </div>
@@ -836,18 +777,6 @@ export default function App() {
                           >
                             <span className="w-2 h-2 rounded-full bg-blue-600"></span>
                             <span>Extrusoras</span>
-                          </button>
-
-                          <button 
-                            onClick={() => {
-                              setIsMenuOpen(false);
-                              setIsObsSubMenuOpen(false);
-                              setIsNotesModalOpen(true);
-                            }}
-                            className="w-full px-3 py-2 text-left text-xs font-black uppercase text-blue-600 hover:bg-blue-100/50 rounded-xl flex items-center gap-2 transition-colors"
-                          >
-                            <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                            <span>Bloco de Notas</span>
                           </button>
                         </div>
                       )}
@@ -981,43 +910,14 @@ export default function App() {
               </div>
             </div>
           </div>
-
-          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100 items-center">
-            {/* BOTÃO INCLUIR COM DROPDOWN */}
-            <div className="relative">
-              <button 
-                onClick={() => setIsImportMenuOpen(!isImportMenuOpen)} 
-                disabled={isImporting || isReadOnly} 
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black disabled:opacity-50'}`}
-              >
-                {isImporting ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Import />} 
-                <span>Incluir</span>
-                <Icons.ChevronDown />
-              </button>
-
-              {isImportMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setIsImportMenuOpen(false)}></div>
-                  <div className="absolute left-0 top-12 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 w-48 py-2 animate-in fade-in zoom-in duration-150">
-                    <button 
-                      onClick={() => triggerFileInput('alocacao')}
-                      className="w-full px-4 py-2.5 text-left text-xs font-black uppercase text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2 transition-colors"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                      <span>Alocação</span>
-                    </button>
-                    <button 
-                      onClick={() => triggerFileInput('estoque')}
-                      className="w-full px-4 py-2.5 text-left text-xs font-black uppercase text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2 transition-colors border-t border-slate-100"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                      <span>Estoque</span>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
+          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
+            <button 
+              onClick={() => fileInputRef.current.click()} 
+              disabled={isImporting || isReadOnly} 
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md transition-all ${isReadOnly ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black disabled:opacity-50'}`}
+            >
+              {isImporting ? <Icons.Loader2 className="w-4 h-4 animate-spin" /> : <Icons.Import />} Incluir
+            </button>
             <button 
               onClick={handleSequenciar} 
               disabled={isReadOnly}
@@ -1037,7 +937,6 @@ export default function App() {
         </section>
 
         {/* Tabela Principal */}
-        {}
         <section className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col w-full">
           <div className="overflow-x-auto min-h-[300px] w-full">
             <table className="w-full text-left border-collapse table-fixed">
@@ -1062,232 +961,102 @@ export default function App() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((item) => {
-                  const isExpanded = expandedRowId === item.id;
-                  
-                  const rowItemCodes = [
-                    String(item.item || '').trim().toUpperCase(),
-                    String(item.itemFinal || '').trim().toUpperCase(),
-                    ...(item.itensFinaisAgrupados || []).map(code => String(code || '').trim().toUpperCase())
-                  ].filter(Boolean);
-
-                  // Filtrar somente as linhas reais importadas do Excel
-                  const matchingExcelRows = excelStockRows.filter(r => {
-                    const prodCode = String(r.produto || '').trim().toUpperCase();
-                    if (!prodCode) return false;
-                    const cleanProdCode = prodCode.replace(/^0+/, '');
-                    const isCodeMatch = rowItemCodes.some(code => {
-                      const cleanCode = code.replace(/^0+/, '');
-                      return prodCode === code || cleanProdCode === cleanCode;
-                    });
-                    return isCodeMatch;
-                  });
-
                   return (
-                    <React.Fragment key={item.id}>
-                      <tr 
-                        onClick={() => setExpandedRowId(isExpanded ? null : item.id)}
-                        className={`hover:bg-blue-50/40 transition-colors cursor-pointer group border-b border-slate-100 ${isExpanded ? 'bg-blue-50/30' : 'h-14'}`}
-                      >
-                        <td className="px-2 py-2 text-center font-black text-blue-600 tabular-nums align-middle">{item.sequencia || '-'}</td>
-                        <td className="px-4 py-2 font-bold text-slate-700 whitespace-nowrap align-middle">{item.maquina || '-'}</td>
-                        <td className="px-4 py-2 text-sm font-black text-blue-600 whitespace-nowrap align-middle">{item.item || '-'}</td>
-                        
-                        <td className="px-4 py-2 font-mono text-sm text-slate-500 align-middle">
-                          <div className={isExpanded ? 'break-words' : 'truncate'}>
-                            {item.itensFinaisAgrupados && item.itensFinaisAgrupados.length > 0 
-                              ? item.itensFinaisAgrupados.join(' / ') 
-                              : (item.itemFinal || '-')}
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors group border-b border-slate-100">
+                      <td className="px-2 py-4 text-center font-black text-blue-600 tabular-nums">{item.sequencia || '-'}</td>
+                      <td className="px-4 py-4 font-bold text-slate-700 whitespace-nowrap">{item.maquina || '-'}</td>
+                      <td className="px-4 py-4 text-sm font-semibold text-slate-600 whitespace-nowrap">{item.item || '-'}</td>
+                      
+                      <td className="px-4 py-4 font-mono text-sm text-slate-500 break-words">
+                        {item.itensFinaisAgrupados && item.itensFinaisAgrupados.length > 0 
+                          ? item.itensFinaisAgrupados.join(' / ') 
+                          : (item.itemFinal || '-')}
+                      </td>
+                      
+                      <td className="px-4 py-4 text-sm text-slate-600 break-words whitespace-normal font-medium leading-relaxed">
+                        {item.descricao || '-'}
+                      </td>
+                      
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-center gap-1 group/qty">
+                          {!isReadOnly && (
+                            <button onClick={() => { setIsQtyOnlyMode(true); setEditingId(item.id); setFormData(item); setIsModalOpen(true); }} className="p-1 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover/qty:opacity-100"><Icons.Pencil /></button>
+                          )}
+                          <div className="flex flex-col items-center">
+                            <span className="font-black text-blue-600 text-base tabular-nums">{formatQty(item.quantidade)}</span>
+                            <span className="text-[9px] text-slate-400 uppercase font-black tracking-tighter">kg</span>
                           </div>
-                        </td>
-                        
-                        <td className="px-4 py-2 text-sm text-slate-600 font-medium leading-tight align-middle">
-                          <div className={isExpanded ? 'whitespace-normal break-words py-2' : 'truncate'}>
-                            {item.descricao || '-'}
-                          </div>
-                        </td>
-                        
-                        <td className="px-4 py-2 align-middle">
-                          <div className="flex items-center justify-center gap-1 group/qty">
-                            {!isReadOnly && (
-                              <button 
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
-                                  setIsQtyOnlyMode(true); 
-                                  setEditingId(item.id); 
-                                  setFormData(item); 
-                                  setIsModalOpen(true); 
-                                }} 
-                                className="p-1 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover/qty:opacity-100"
-                              >
-                                <Icons.Pencil />
-                              </button>
-                            )}
-                            <div className="flex flex-col items-center">
-                              <span className="font-black text-blue-600 text-base tabular-nums">{formatQty(item.quantidade)}</span>
-                              <span className="text-[9px] text-slate-400 uppercase font-black tracking-tighter">kg</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 font-bold text-slate-700 whitespace-nowrap tabular-nums align-middle">{item.ordemProducao || '-'}</td>
-                        <td className="px-2 py-2 text-center align-middle">
-                          <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                            <button 
-                              onClick={() => !isReadOnly && handleAddPerda(item)} 
-                              disabled={isReadOnly}
-                              className={`min-w-[54px] py-1.5 rounded-xl text-xs font-black transition-all border-2 active:scale-95 shadow-sm ${isReadOnly ? 'cursor-not-allowed opacity-60' : ''} ${(item.perdaCount || 0) > 0 ? 'bg-emerald-500 text-white border-emerald-600 shadow-md' : 'bg-white text-slate-300 border-slate-100 hover:border-slate-300'}`}
-                            >
-                              {lossValue}
-                            </button>
-                            {!isReadOnly && (item.perdaCount || 0) > 0 && (
-                              <div className="flex flex-col items-start scale-90">
-                                <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded-md border border-emerald-100">{item.perdaCount}x</span>
-                                <button onClick={() => handleResetPerda(item)} className="text-[8px] font-black text-slate-300 hover:text-red-400 uppercase tracking-tighter flex items-center gap-0.5"><Icons.Refresh /> reset</button>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-2 py-2 text-center align-middle">
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 font-bold text-slate-700 whitespace-nowrap tabular-nums">{item.ordemProducao || '-'}</td>
+                      <td className="px-2 py-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
                           <button 
-                            onClick={(e) => { e.stopPropagation(); if (!isReadOnly) toggleStatus(item); }} 
+                            onClick={() => !isReadOnly && handleAddPerda(item)} 
                             disabled={isReadOnly}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider border transition-all ${isReadOnly ? 'cursor-not-allowed opacity-80' : ''} ${item.status === 'Conferido' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'}`}
+                            className={`min-w-[54px] py-1.5 rounded-xl text-xs font-black transition-all border-2 active:scale-95 shadow-sm ${isReadOnly ? 'cursor-not-allowed opacity-60' : ''} ${(item.perdaCount || 0) > 0 ? 'bg-emerald-500 text-white border-emerald-600 shadow-md' : 'bg-white text-slate-300 border-slate-100 hover:border-slate-300'}`}
                           >
-                            {item.status === 'Conferido' ? <Icons.Check /> : <Icons.Pending />} {item.status}
+                            {lossValue}
                           </button>
-                        </td>
-                        <td className="px-4 py-2 text-right align-middle" onClick={(e) => e.stopPropagation()}>
-                          {isReadOnly ? (
-                            <span className="text-amber-500 text-[9px] font-black uppercase tracking-wider bg-amber-50 px-2 py-1 rounded-lg border border-amber-100 inline-flex items-center gap-1">
-                              <Icons.Lock /> Trancado
-                            </span>
-                          ) : (
-                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(item.id); setFormData(item); setIsModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Icons.Edit /></button>
-                              <button onClick={() => setDeleteTargetId(item.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Icons.Trash /></button>
+                          {!isReadOnly && (item.perdaCount || 0) > 0 && (
+                            <div className="flex flex-col items-start scale-90">
+                              <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded-md border border-emerald-100">{item.perdaCount}x</span>
+                              <button onClick={() => handleResetPerda(item)} className="text-[8px] font-black text-slate-300 hover:text-red-400 uppercase tracking-tighter flex items-center gap-0.5"><Icons.Refresh /> reset</button>
                             </div>
                           )}
-                        </td>
+                        </div>
+                      </td>
+                      <td className="px-2 py-4 text-center">
+                        <button 
+                          onClick={() => !isReadOnly && toggleStatus(item)} 
+                          disabled={isReadOnly}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider border transition-all ${isReadOnly ? 'cursor-not-allowed opacity-80' : ''} ${item.status === 'Conferido' ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'}`}
+                        >
+                          {item.status === 'Conferido' ? <Icons.Check /> : <Icons.Pending />} {item.status}
+                        </button>
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        {isReadOnly ? (
+                          <span className="text-amber-500 text-[9px] font-black uppercase tracking-wider bg-amber-50 px-2 py-1 rounded-lg border border-amber-100 inline-flex items-center gap-1">
+                            <Icons.Lock /> Trancado
+                          </span>
+                        ) : (
+                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => { setIsQtyOnlyMode(false); setEditingId(item.id); setFormData(item); setIsModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Icons.Edit /></button>
+                            <button onClick={() => setDeleteTargetId(item.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Icons.Trash /></button>
+                          </div>
+                        )}
+                      </td>
 
-                        {/* COLUNA ESTOQUE DE SEGURANÇA: Exibe texto verde se houver dados, senão fica em branco */}
-                        <td className="px-2 py-2 text-center align-middle" onClick={(e) => e.stopPropagation()}>
-                          {(() => {
-                            const stockRules = safetyStocks.filter(s => {
-                              const sItem = String(s.item || '').trim().toUpperCase();
-                              return sItem && rowItemCodes.includes(sItem);
-                            });
-
-                            if (stockRules.length === 0) return null;
-
-                            return (
-                              <div className="flex flex-col items-center gap-1">
-                                {stockRules.map(stock => {
-                                  const qtyToShow = stock.estoque !== undefined && stock.estoque !== null && stock.estoque !== '' 
-                                    ? stock.estoque 
-                                    : stock.quantidade;
-                                  return (
-                                    <button
-                                      key={stock.id}
-                                      onClick={() => toggleSafetyStockStatus(stock.id)}
-                                      disabled={isReadOnly}
-                                      className={`inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border transition-all active:scale-95 bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm hover:bg-emerald-100 ${isReadOnly ? 'cursor-not-allowed opacity-80' : ''}`}
-                                      title={`Cliente: ${stock.cliente || 'Geral'} | Qtd Total: ${formatQty(stock.quantidade)} kg | Estoque Atual: ${formatQty(stock.estoque)} kg | Pendente: ${formatQty(stock.pendente)} kg | Disp: ${stock.dataDisponibilidade || '-'}`}
-                                    >
-                                      <Icons.Shield />
-                                      <span className="text-emerald-600 font-black">{formatQty(qtyToShow)} kg</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })()}
-                        </td>
-                      </tr>
-
-                      {/* TELA DA LINHA EXPANDIDA PARA CONFRONTO DE ESTOQUE PURO DO EXCEL */}
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan="11" className="p-4 bg-slate-100/90 border-b border-slate-300">
-                            <div className="bg-slate-200/60 p-4 rounded-2xl border border-slate-300 space-y-4 animate-in fade-in duration-150">
-                              
-                              <div className="flex justify-between items-center border-b border-slate-300 pb-3">
-                                <div className="flex items-center gap-3">
-                                  <span className="p-2 bg-blue-600 text-white rounded-xl"><Icons.Grid /></span>
-                                  <div>
-                                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight">
-                                      REGISTROS DO EXCEL IMPORTADO PARA CONFRONTO DE ESTOQUE DO ITEM: <span className="text-blue-600">{item.item}</span>
-                                    </h4>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase">Confronto de saldos reais por lote e posição no depósito</p>
-                                  </div>
-                                </div>
-
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); setExpandedRowId(null); }}
-                                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-black transition-all shadow-md"
-                                >
-                                  <Icons.ArrowLeft />
-                                  <span>Voltar</span>
-                                </button>
-                              </div>
-
-                              <div className="overflow-x-auto border border-slate-300 rounded-xl bg-white shadow-inner">
-                                <table className="w-full text-left border-collapse text-xs">
-                                  <thead>
-                                    <tr className="bg-slate-800 text-white font-black text-[9px] uppercase tracking-wider">
-                                      <th className="px-3 py-2.5 border-r border-slate-700">TIPO DE DEPÓSITO</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700">PRODUTO</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700">UNIDADE COMERCIAL</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700">POSIÇÃO NO DEPÓSITO</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700 text-center">QUANTIDADE</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700 text-center">UM BÁSICA</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700">LOTE</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700">DENOMINAÇÃO DO TIPO DE ESTOQUE</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700">DESCRIÇÃO BREVE DO PRODUTO</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700 text-center">DATA EM</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700 text-center">TIPO ID VERIFICAÇÃO</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700 text-center">CONTR.QUALID.</th>
-                                      <th className="px-3 py-2.5 border-r border-slate-700 text-center">HR.ENTR.MERCADORIAS</th>
-                                      <th className="px-3 py-2.5 text-center">DATA DO VENCIMENTO</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-200 font-bold text-slate-700 text-[11px]">
-                                    {matchingExcelRows.length === 0 ? (
-                                      <tr>
-                                        <td colSpan="14" className="px-4 py-8 text-center text-slate-400 font-bold uppercase tracking-wider">
-                                          Nenhum registro de estoque no Excel importado para este item. Importe a base de estoque em Incluir -&gt; Estoque.
-                                        </td>
-                                      </tr>
-                                    ) : (
-                                      matchingExcelRows.map((exRow) => {
-                                        const isVerifA = String(exRow.tipoIdVerificacao || '').trim().toUpperCase() === 'A';
-                                        return (
-                                          <tr key={exRow.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-3 py-2 border-r border-slate-200 font-bold uppercase">{exRow.tipoDeposito || '-'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 font-black text-blue-600">{exRow.produto || '-'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 font-mono text-[10px]">{exRow.unidadeComercial || '-'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 font-bold text-slate-800">{exRow.posicaoDeposito || '-'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 text-center font-black text-blue-600 tabular-nums">{formatQty(exRow.quantidade)}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 text-center font-bold text-slate-400">{exRow.umBasica || 'KG'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 font-mono text-emerald-600 text-[10px]">{exRow.lote || '-'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 font-medium">{exRow.denominacaoEstoque || '-'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 font-medium uppercase text-[10px]">{exRow.descricao || '-'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 text-center font-bold text-slate-600">{formatExcelDate(exRow.dataEm)}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 text-center font-black">{exRow.tipoIdVerificacao || '-'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 text-center font-mono text-[10px] font-bold">{isVerifA ? (exRow.contrQualid || '-') : '-'}</td>
-                                            <td className="px-3 py-2 border-r border-slate-200 text-center font-bold text-slate-600">{formatExcelTime(exRow.hrEntrMercadorias)}</td>
-                                            <td className="px-3 py-2 text-center font-bold text-amber-600">{formatExcelDate(exRow.dataVencimento)}</td>
-                                          </tr>
-                                        );
-                                      })
-                                    )}
-                                  </tbody>
-                                </table>
-                              </div>
-
+                      {/* CÉLULA DA COLUNA ESTOQUE DE SEGURANÇA */}
+                      <td className="px-2 py-4 text-center">
+                        {(() => {
+                          const stockRules = safetyStocks.filter(s => s.item === String(item.item || '').trim().toUpperCase());
+                          if (stockRules.length === 0) return <span className="text-slate-300 text-[10px] font-bold">-</span>;
+                          return (
+                            <div className="flex flex-col items-center gap-1">
+                              {stockRules.map(stock => {
+                                const qtyToShow = stock.estoque !== undefined && stock.estoque !== null && stock.estoque !== '' 
+                                  ? stock.estoque 
+                                  : stock.quantidade;
+                                return (
+                                  <button
+                                    key={stock.id}
+                                    onClick={() => toggleSafetyStockStatus(stock.id)}
+                                    disabled={isReadOnly}
+                                    className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500 text-white border border-emerald-600 shadow-md hover:bg-emerald-600 transition-all active:scale-95"
+                                    title={`Cliente: ${stock.cliente || 'Geral'} | Qtd Total: ${formatQty(stock.quantidade)} kg | Estoque Atual: ${formatQty(stock.estoque)} kg | Pendente: ${formatQty(stock.pendente)} kg | Disp: ${stock.dataDisponibilidade || '-'}`}
+                                  >
+                                    <Icons.Shield />
+                                    <span>{formatQty(qtyToShow)} kg</span>
+                                  </button>
+                                );
+                              })}
                             </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                          );
+                        })()}
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -1296,102 +1065,297 @@ export default function App() {
           <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center text-[10px] font-black uppercase tracking-widest mt-auto">
             <span className="text-slate-500">Total: <span className={allocations.length >= MAX_ROWS ? 'text-red-600' : 'text-blue-600'}>{allocations.length} / {MAX_ROWS}</span></span>
             <span className="text-[9px] text-slate-400 italic flex items-center gap-2 font-bold">
-              <Icons.CloudCheck /> Sincronização em tempo real ativa
+              <Icons.CloudCheck /> Sincronização em tempo real ativa no Firebase
             </span>
           </div>
         </section>
-      </main>
-
-      {}
-      {isNotesModalOpen && (
-        <div className="fixed inset-0 z-[100] w-full h-full bg-slate-900 flex flex-col animate-in fade-in duration-200">
-          <div className="px-8 py-5 bg-slate-950 border-b border-slate-800 flex justify-between items-center text-white">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => setIsNotesModalOpen(false)}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl font-black text-xs uppercase tracking-wider border border-slate-700 transition-all active:scale-95"
-              >
-                <Icons.ArrowLeft />
-                <span>Voltar</span>
-              </button>
-              <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
-                <span className="text-blue-500"><Icons.FileText /></span> Bloco de Notas Personalizadas
+        </main>
+      {/* MODAL DE OBSERVAÇÃO - EXTRUSORAS */}
+      {isExtrusorasObsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 my-auto">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <span className="text-blue-600"><Icons.Cpu /></span> Observação - Extrusoras e Capacidade
               </h2>
+              <button onClick={() => setIsExtrusorasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
             </div>
-            
-            <button 
-              onClick={handleSaveNote}
-              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg transition-all active:scale-95"
-            >
-              <Icons.Save />
-              <span>Salvar Nota</span>
-            </button>
-          </div>
 
-          <div className="flex-1 flex overflow-hidden">
-            <div className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col p-4 gap-4">
-              <button 
-                onClick={handleNewNote}
-                className="w-full py-3 bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
-              >
-                <Icons.Plus />
-                <span>Nova Nota</span>
-              </button>
+            <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                    Grupos de Máquinas & Centro de Produção
+                  </div>
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-600 text-[10px] font-black uppercase border-b border-slate-200">
+                        <th className="px-4 py-2 border-r border-slate-200">GRUPO DE MAQUINAS</th>
+                        <th className="px-4 py-2">CENTRO DE PRODUÇÃO</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1001 - 1002 - 1003</td><td className="px-4 py-2 font-black text-blue-600">LISO</td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1004 - 1005</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1010 - 1013</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1015 - 1017</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1016 - 1018</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1019 - 1020</td><td className="px-4 py-2"></td></tr>
+                      <tr><td className="px-4 py-2 border-r border-slate-200">1032 - 1031</td><td className="px-4 py-2"></td></tr>
+                      <tr className="bg-slate-100/80"><td className="px-4 py-2 border-r border-slate-200 font-black">1007 - 1008 -1012 -1031</td><td className="px-4 py-2 font-black text-emerald-600">FFS</td></tr>
+                    </tbody>
+                  </table>
+                </div>
 
-              <div className="flex-1 overflow-y-auto space-y-2">
-                {notes.length === 0 ? (
-                  <p className="text-slate-500 text-xs font-bold text-center py-8">Nenhuma nota guardada.</p>
-                ) : (
-                  notes.map(note => (
-                    <div 
-                      key={note.id}
-                      onClick={() => handleSelectNote(note)}
-                      className={`p-4 rounded-2xl border cursor-pointer transition-all flex justify-between items-start ${activeNoteId === note.id ? 'bg-blue-600/20 border-blue-500 text-white' : 'bg-slate-800/50 border-slate-800 text-slate-300 hover:bg-slate-800'}`}
-                    >
-                      <div className="overflow-hidden pr-2">
-                        <h4 className="font-bold text-sm truncate">{note.title || 'Sem título'}</h4>
-                        <p className="text-slate-500 text-xs truncate mt-1">{note.content || 'Sem conteúdo'}</p>
-                      </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDeleteNote(note.id); }}
-                        className="text-slate-500 hover:text-red-400 p-1"
-                        title="Eliminar Nota"
-                      >
-                        <Icons.Trash />
-                      </button>
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                    Capacidade de Produção Diária
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="sticky top-0 bg-slate-100 text-slate-600 text-[10px] font-black uppercase border-b border-slate-200">
+                        <tr>
+                          <th className="px-4 py-2 border-r border-slate-200">MAQUINA</th>
+                          <th className="px-4 py-2 text-right">PRODUÇÃO DIARIA – Kg/H</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1001</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1002</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1003</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1004</td><td className="px-4 py-1.5 text-right font-black tabular-nums">400</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1005</td><td className="px-4 py-1.5 text-right font-black tabular-nums">400</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1010</td><td className="px-4 py-1.5 text-right font-black tabular-nums">400</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1013</td><td className="px-4 py-1.5 text-right font-black tabular-nums">280</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1015</td><td className="px-4 py-1.5 text-right font-black tabular-nums">600</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1016</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1017</td><td className="px-4 py-1.5 text-right font-black tabular-nums">600</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1018</td><td className="px-4 py-1.5 text-right font-black tabular-nums">700</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1019</td><td className="px-4 py-1.5 text-right font-black tabular-nums">550</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1020</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1032</td><td className="px-4 py-1.5 text-right font-black tabular-nums">850</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1033</td><td className="px-4 py-1.5 text-right font-black tabular-nums">140</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1007</td><td className="px-4 py-1.5 text-right font-black tabular-nums">170</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1008</td><td className="px-4 py-1.5 text-right font-black tabular-nums">200</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1012</td><td className="px-4 py-1.5 text-right font-black tabular-nums">180</td></tr>
+                        <tr><td className="px-4 py-1.5 border-r border-slate-200">1031</td><td className="px-4 py-1.5 text-right font-black tabular-nums">300</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                  Divisão de Especialistas
+                </div>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-red-200 shadow-sm">
+                    <div className="font-black text-red-600 text-sm w-28">CLEITON ➔</div>
+                    <div className="text-red-600 font-bold text-xs space-x-1">
+                      <span>1001,</span><span>1002,</span><span>1003,</span><span>1004,</span><span>1005,</span><span>1010,</span><span>1013</span>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 bg-slate-950 p-8 flex flex-col gap-6 overflow-y-auto">
-              <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Título da Nota</label>
-                <input 
-                  type="text"
-                  placeholder="Escreva um título..."
-                  value={currentNote.title}
-                  onChange={(e) => setCurrentNote({ ...currentNote, title: e.target.value })}
-                  className="w-full px-6 py-4 bg-slate-900 border border-slate-800 text-white font-black text-xl rounded-2xl focus:outline-none focus:border-blue-500"
-                />
+                  </div>
+                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-200 shadow-sm">
+                    <div className="text-emerald-600 font-bold text-xs space-x-1 flex-1">
+                      <span>1015,</span><span>1017,</span><span>1016,</span><span>1018,</span><span>1019,</span><span>1020,</span><span>1032,</span><span>1033</span>
+                    </div>
+                    <div className="font-black text-emerald-600 text-sm w-28 text-right">➔ BENEDITO</div>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex-1 flex flex-col">
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Conteúdo / Anotações</label>
-                <textarea 
-                  placeholder="Escreva aqui as suas observações..."
-                  value={currentNote.content}
-                  onChange={(e) => setCurrentNote({ ...currentNote, content: e.target.value })}
-                  className="w-full flex-1 p-6 bg-slate-900 border border-slate-800 text-slate-200 font-medium text-base rounded-2xl focus:outline-none focus:border-blue-500 resize-none min-h-[400px]"
-                ></textarea>
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-slate-200/80 px-4 py-2.5 text-xs font-black uppercase text-slate-700 border-b border-slate-300">
+                  Responsáveis pelas Máquinas
+                </div>
+                <table className="w-full text-center border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 text-xs font-black uppercase border-b border-slate-200">
+                      <th className="px-4 py-2.5 border-r border-slate-200 text-red-600">FABIANO</th>
+                      <th className="px-4 py-2.5 border-r border-slate-200 text-emerald-600">DANIEL</th>
+                      <th className="px-4 py-2.5 text-purple-600">RENATO</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-xs font-black">
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1001</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1015</td><td className="px-4 py-1.5 text-purple-600">1007</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1002</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1017</td><td className="px-4 py-1.5 text-purple-600">1008</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1003</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1016</td><td className="px-4 py-1.5 text-purple-600">1012</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1004</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1018</td><td className="px-4 py-1.5 text-purple-600">1031</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1005</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1019</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1010</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1020</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-red-600">1013</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1032</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                    <tr><td className="px-4 py-1.5 border-r border-slate-200 text-slate-300">-</td><td className="px-4 py-1.5 border-r border-slate-200 text-emerald-600">1033</td><td className="px-4 py-1.5 text-slate-300">-</td></tr>
+                  </tbody>
+                </table>
               </div>
+
             </div>
           </div>
         </div>
       )}
 
-      {}
+      {/* MODAL DE OBSERVAÇÃO - MATRIZ-CAMADAS */}
+      {isMatrizCamadasObsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-200 my-auto">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <span className="text-blue-600"><Icons.Grid /></span> Observação - Especificações Matriz e Camadas
+              </h2>
+              <button onClick={() => setIsMatrizCamadasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
+            </div>
+
+            <div className="p-8 space-y-6 max-h-[80vh] overflow-y-auto">
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
+                <div className="text-blue-600 text-2xl font-black">➔</div>
+                <div className="text-xs font-black text-slate-800 uppercase tracking-wider space-y-1">
+                  <div>MATRIZ: LARGURA DO BALÃO</div>
+                  <div>CAMADA: CAMADA DO FILME</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1001</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1002</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1003</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1004</td><td className="px-2 py-2 border-r border-slate-200">600</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1005</td><td className="px-2 py-2 border-r border-slate-200">600</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1007</td><td className="px-2 py-2 border-r border-slate-200">175</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1008</td><td className="px-2 py-2 border-r border-slate-200">175</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1012</td><td className="px-2 py-2 border-r border-slate-200">175</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1031</td><td className="px-2 py-2 border-r border-slate-200">160</td><td className="px-2 py-2">5</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1010</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1013</td><td className="px-2 py-2 border-r border-slate-200">450</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1015</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1017</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1016</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">3</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1018</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">3</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1019</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">9</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1020</td><td className="px-2 py-2 border-r border-slate-200">500</td><td className="px-2 py-2">7</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-center border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-[10px] font-black uppercase">
+                        <th className="px-2 py-2.5 border-r border-slate-300">MAQUINA</th>
+                        <th className="px-2 py-2.5 border-r border-slate-300">MATRIZ</th>
+                        <th className="px-2 py-2.5">CAMADAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1032</td><td className="px-2 py-2 border-r border-slate-200">550</td><td className="px-2 py-2">5</td></tr>
+                      <tr><td className="px-2 py-2 border-r border-slate-200 font-bold">1033</td><td className="px-2 py-2 border-r border-slate-200">350</td><td className="px-2 py-2">7</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE OBSERVAÇÃO - ALOCAÇÃO */}
       {isAlocacaoObsModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 my-auto">
@@ -1403,6 +1367,7 @@ export default function App() {
             </div>
 
             <div className="p-8 space-y-8 max-h-[80vh] overflow-y-auto">
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                   <table className="w-full text-left border-collapse">
@@ -1413,57 +1378,194 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">SEGUNDA</td><td className="px-4 py-2.5">QUI</td></tr>
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">TERÇA</td><td className="px-4 py-2.5">SEX</td></tr>
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">QUARTA</td><td className="px-4 py-2.5">SAB - DOM</td></tr>
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">QUINTA</td><td className="px-4 py-2.5">SEG</td></tr>
-                      <tr><td className="px-4 py-2.5 border-r border-slate-200">SEXTA</td><td className="px-4 py-2.5">TER - QUA</td></tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">SEGUNDA</td>
+                        <td className="px-4 py-2.5">QUI</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">TERÇA</td>
+                        <td className="px-4 py-2.5">SEX</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">QUARTA</td>
+                        <td className="px-4 py-2.5">SAB - DOM</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">QUINTA</td>
+                        <td className="px-4 py-2.5">SEG</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 border-r border-slate-200">SEXTA</td>
+                        <td className="px-4 py-2.5">TER - QUA</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200/80 text-slate-700 text-xs font-black uppercase">
+                        <th className="px-4 py-3 border-r border-slate-300 w-28 text-center">Cores</th>
+                        <th className="px-4 py-3">Tipo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#ff0000] text-white px-3 py-1 rounded-md font-black block shadow-sm">C</span>
+                        </td>
+                        <td className="px-4 py-2">CANCELADO</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#ff6600] text-white px-3 py-1 rounded-md font-black block shadow-sm">I</span>
+                        </td>
+                        <td className="px-4 py-2">48 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#1e6091] text-white px-3 py-1 rounded-md font-black block shadow-sm">U</span>
+                        </td>
+                        <td className="px-4 py-2">36 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#00a8e8] text-white px-3 py-1 rounded-md font-black block shadow-sm">ZA</span>
+                        </td>
+                        <td className="px-4 py-2">72 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#80b918] text-white px-3 py-1 rounded-md font-black block shadow-sm">A</span>
+                        </td>
+                        <td className="px-4 py-2">96 HORAS</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-[#fde2e4] text-slate-800 px-3 py-1 rounded-md font-black block border border-pink-200 shadow-sm">R</span>
+                        </td>
+                        <td className="px-4 py-2">REIMPRESSÃO</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 border-r border-slate-200 text-center">
+                          <span className="bg-white text-slate-800 px-3 py-1 rounded-md font-black block border border-slate-300 shadow-sm">T</span>
+                        </td>
+                        <td className="px-4 py-2">ZONA BRANCA</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-200/80 text-slate-700 text-xs font-black uppercase">
+                      <th className="px-4 py-3 border-r border-slate-300 w-64">Coluna e Cores</th>
+                      <th className="px-4 py-3">Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#a0aec0] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA E ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">AMOSTRA</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#90caf9] text-slate-900 px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">LOTE PILOTO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#ff0000] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">BLOQUEADO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#000000] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ITEM</span>
+                      </td>
+                      <td className="px-4 py-2">OBSOLETO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#b7e4c7] text-slate-900 px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA</span>
+                      </td>
+                      <td className="px-4 py-2">REVISADO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#7c3aed] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">MÁQUINA</span>
+                      </td>
+                      <td className="px-4 py-2">SEM CADASTRO DE ACERTO</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200">
+                        <span className="bg-[#a0aec0] text-white px-3 py-1 rounded-md font-black block text-center shadow-sm">ENGENHARIA</span>
+                      </td>
+                      <td className="px-4 py-2">PEDIDO VINDO DE AMOSTRA E NÃO PRECISA DE REVISÃO</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-200/80 text-slate-700 text-xs font-black uppercase">
+                      <th className="px-4 py-3 border-r border-slate-300 w-48 text-center">Organização dos Dias</th>
+                      <th className="px-4 py-3 text-center">Ordem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-xs font-bold text-slate-800">
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#fde2e4] text-slate-800 px-3 py-1 rounded-md font-black block border border-pink-200 shadow-sm">R</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">1</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#1e6091] text-white px-3 py-1 rounded-md font-black block shadow-sm">U</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">2</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#ff6600] text-white px-3 py-1 rounded-md font-black block shadow-sm">I</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">3</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#00a8e8] text-white px-3 py-1 rounded-md font-black block shadow-sm">ZA</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">4</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border-r border-slate-200 text-center">
+                        <span className="bg-[#80b918] text-white px-3 py-1 rounded-md font-black block shadow-sm">A</span>
+                      </td>
+                      <td className="px-4 py-2 text-center font-black text-base">5</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
             </div>
           </div>
         </div>
       )}
 
-      {isMatrizCamadasObsModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-6xl overflow-hidden animate-in zoom-in duration-200 my-auto">
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                <span className="text-blue-600"><Icons.Grid /></span> Observação - Especificações Matriz e Camadas
-              </h2>
-              <button onClick={() => setIsMatrizCamadasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
-            </div>
-            <div className="p-8">
-              <p className="text-xs font-bold text-slate-600">Matriz e Camadas configuradas.</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isExtrusorasObsModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-10">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200 my-auto">
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                <span className="text-blue-600"><Icons.Cpu /></span> Observação - Extrusoras e Capacidade
-              </h2>
-              <button onClick={() => setIsExtrusorasObsModalOpen(false)} className="p-2 bg-slate-200/50 rounded-full hover:bg-slate-200 transition-colors"><Icons.X /></button>
-            </div>
-            <div className="p-8">
-              <p className="text-xs font-bold text-slate-600">Extrusoras configuradas.</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {}
+      {/* MODAL DE ESTOQUE DE SEGURANÇA */}
       {isSafetyStockOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in duration-200">
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
                 <span className="text-blue-600"><Icons.Shield /></span> Estoque de Segurança
               </h2>
@@ -1472,6 +1574,7 @@ export default function App() {
                 <button 
                   onClick={handleGenerateSafetyStockPDF} 
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase hover:bg-emerald-700 transition-all shadow-md active:scale-95"
+                  title="Gerar Relatório PDF em A4 Paisagem"
                 >
                   <Icons.Printer />
                   <span>Extrair PDF</span>
@@ -1582,6 +1685,7 @@ export default function App() {
                         type="button" 
                         onClick={handleCancelEditSafetyStock}
                         className="p-2.5 bg-slate-200 text-slate-600 rounded-xl font-black text-xs uppercase hover:bg-slate-300 transition-all"
+                        title="Cancelar Edição"
                       >
                         <Icons.X />
                       </button>
@@ -1636,8 +1740,20 @@ export default function App() {
                             {!isReadOnly && (
                               <td className="px-4 py-3 text-right">
                                 <div className="flex items-center justify-end gap-1">
-                                  <button onClick={() => handleEditSafetyStock(stock)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Icons.Edit /></button>
-                                  <button onClick={() => handleDeleteSafetyStock(stock.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Icons.Trash /></button>
+                                  <button 
+                                    onClick={() => handleEditSafetyStock(stock)} 
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                    title="Editar Estoque"
+                                  >
+                                    <Icons.Edit />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteSafetyStock(stock.id)} 
+                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                    title="Remover"
+                                  >
+                                    <Icons.Trash />
+                                  </button>
                                 </div>
                               </td>
                             )}
@@ -1653,7 +1769,7 @@ export default function App() {
         </div>
       )}
 
-      {}
+      {/* MODAL PERSONALIZADO DE CONFIRMAÇÃO DE ELIMINAÇÃO */}
       {deleteTargetId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8 text-center animate-in zoom-in duration-200">
@@ -1661,16 +1777,16 @@ export default function App() {
               <Icons.Trash />
             </div>
             <h2 className="text-xl font-black text-slate-800 uppercase mb-2">Eliminar Item?</h2>
-            <p className="text-slate-500 text-sm font-medium mb-8">Esta ação apagará esta alocação definitivamente.</p>
+            <p className="text-slate-500 text-sm font-medium mb-8">Esta ação irá apagar esta alocação de forma definitiva.</p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteTargetId(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button>
-              <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Eliminar</button>
+              <button onClick={confirmDelete} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Sim, Eliminar</button>
             </div>
           </div>
         </div>
       )}
 
-      {}
+      {/* Modal Ajustes */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8">
@@ -1683,18 +1799,19 @@ export default function App() {
         </div>
       )}
 
+      {/* Modal Confirmação Limpar */}
       {isClearModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8 text-center">
             <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6"><Icons.Alert /></div>
             <h2 className="text-xl font-black text-slate-800 uppercase mb-2">Limpar Tudo?</h2>
-            <p className="text-slate-500 text-sm font-medium mb-8">Apagar todos os dados da aplicação? Esta ação não pode ser desfeita.</p>
-            <div className="flex gap-3"><button onClick={() => setIsClearModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button><button onClick={handleClearAll} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Limpar</button></div>
+            <p className="text-slate-500 text-sm font-medium mb-8">Apagar todos os dados locais e também os salvos na nuvem? Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-3"><button onClick={() => setIsClearModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest">Cancelar</button><button onClick={handleClearAll} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Sim, Limpar</button></div>
           </div>
         </div>
       )}
 
-      {}
+      {/* Modal Cadastro/Edição */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto py-20">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in">
@@ -1722,4 +1839,6 @@ export default function App() {
       )}
     </div>
   );
-}
+};
+
+export default App;
